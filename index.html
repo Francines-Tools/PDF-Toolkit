@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Local PDF Compressor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--text:#1d1d1b;--muted:#6b6a64;--line:#dedcd3;--accent:#2f6f4f;--accentbg:#e5f1ea;--onaccent:#fff;--warn:#9a5b00;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161715;--card:#202220;--text:#ecebe5;--muted:#9c9b93;--line:#33362f;--accent:#6cc79a;--accentbg:#1d3328;--onaccent:#0e1b14;--warn:#e0a84a}}
+:root[data-theme="dark"]{--bg:#161715;--card:#202220;--text:#ecebe5;--muted:#9c9b93;--line:#33362f;--accent:#6cc79a;--accentbg:#1d3328;--onaccent:#0e1b14;--warn:#e0a84a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+main{max-width:620px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:.92rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.drop{display:block;width:100%;border:2px dashed var(--line);text-align:center;padding:34px 16px;cursor:pointer;border-radius:14px;background:var(--card);color:var(--text);font:inherit;font-weight:400;margin-bottom:14px}
+.drop.over{border-color:var(--accent);background:var(--accentbg)}
+.drop b{display:block;font-size:1.05rem;margin-bottom:4px}
+.drop span{color:var(--muted);font-size:.9rem}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.muted{color:var(--muted);font-size:.9rem}
+.lvl{display:block;border:2px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;position:relative;background:var(--card)}
+.lvl.sel{border-color:var(--accent);background:var(--accentbg)}
+.lvl input{position:absolute;opacity:0}
+.lvl .name{font-weight:650}
+.lvl .size{font-weight:650;white-space:nowrap}
+.badge{display:inline-block;background:var(--accent);color:var(--onaccent);font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:middle;letter-spacing:.02em}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+button{font:inherit;font-weight:650;border:0;border-radius:12px;padding:13px 18px;background:var(--accent);color:var(--onaccent);width:100%;cursor:pointer}
+button.sec{background:transparent;color:var(--muted);border:1px solid var(--line);margin-top:10px;font-weight:500}
+button:disabled{opacity:.5;cursor:default}
+.note{font-size:.84rem;color:var(--muted);margin:10px 0 0}
+.warn{color:var(--warn)}
+.big{font-size:1.6rem;font-weight:700}
+.hide{display:none!important}
+.err{color:var(--warn);font-size:.9rem;margin:0 0 12px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+button.tab,button.tabx{flex:1;width:auto;background:var(--card);color:var(--text);border:1px solid var(--line)}
+button.tabx{flex:0 0 auto;font-weight:500;color:var(--muted)}
+button.tab.sel{background:var(--accent);color:var(--onaccent);border-color:var(--accent)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button.t{width:auto;flex:1;padding:11px 8px;font-size:.92rem}
+button.t.g{background:transparent;color:var(--text);border:1px solid var(--line)}
+input[type=number]{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+.pg{position:relative;background:#fff;margin:0 auto 12px;box-shadow:0 1px 6px rgba(0,0,0,.3)}
+.it{position:absolute;border:1px dashed rgba(47,111,79,.7)}
+.it.sel{border:1.5px solid #2f6f4f;z-index:5}
+.it .tx,.it .mono{width:100%;height:100%;border:0;background:rgba(255,255,255,.01);color:#000;outline:0;margin:0;resize:none;display:block;font-family:Helvetica,Arial,sans-serif}
+.it .tx{overflow:hidden}
+.it .mono{font-family:"Courier New",Courier,monospace;padding:0}
+.it .sg{width:100%;height:100%;display:block;touch-action:none;-webkit-user-drag:none}
+.stick{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:12px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.stick>div:not(.tools):not(.hide){margin-top:10px;padding-top:10px;border-top:1px solid var(--line);max-height:40vh;overflow:auto}
+.ctl{position:absolute;left:0;bottom:calc(100% + 2px);display:none;gap:4px;font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;white-space:nowrap;user-select:none;-webkit-user-select:none}
+.it.below .ctl{bottom:auto;top:calc(100% + 2px)}
+.it.sel .ctl{display:flex}
+.ctl span{display:flex;align-items:center;justify-content:center;width:28px;height:28px;background:#2f6f4f;border:2px solid #fff;border-radius:50%;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.ctl svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ctl .x{background:#b3261e}
+.grip{touch-action:none;cursor:move!important}
+.rz{position:absolute;right:-10px;bottom:-10px;width:22px;height:22px;background:#2f6f4f;border:2px solid #fff;border-radius:50%;touch-action:none;display:none;cursor:nwse-resize}
+.it.sel .rz{display:block}
+.sigs{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sgi{position:relative;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;cursor:pointer}
+.sgi img{height:44px;display:block}
+.sgi span{position:absolute;top:-8px;right:-8px;background:var(--text);color:var(--bg);width:20px;height:20px;border-radius:50%;text-align:center;font-size:.7rem;line-height:20px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+#pad{width:100%;aspect-ratio:3/1;background:#fff;border:1px solid var(--line);border-radius:8px;touch-action:none;margin:10px 0;display:block}
+.fmt{gap:6px}
+.fmt select{font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+button.t.f{flex:0 0 auto;width:40px;padding:8px 0}
+button.t.g.on{background:var(--accent);color:var(--onaccent);border-color:var(--accent)}
+.fmt svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;display:block;margin:auto}
+#pAl{display:flex;gap:6px}
+#pColor{width:40px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.ctl .dup{background:#2563eb}
+.tabs{flex-wrap:wrap}
+button.tab,button.tabx{padding:12px 6px;font-size:.88rem}
+.xin{font:inherit;padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);width:100%;margin-bottom:10px}
+.xrow{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.xth{width:64px;height:64px;flex:0 0 64px;background:#fff;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:.62rem;color:#666;text-align:center}
+.xth img{max-width:100%;max-height:100%}
+.xinfo{flex:1;min-width:0;font-size:.85rem;word-break:break-all}
+.xrow button{width:auto;flex:0 0 auto;padding:9px 13px}
+#rgStage{position:relative;margin:10px auto 0;touch-action:none;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.3)}
+.stick .tools{gap:6px}
+.stick .tools+.tools{margin-top:6px}
+.stick button.t{padding:8px 6px;font-size:.85rem}
+.stick .note{margin:6px 0 0}
+.stick .note:empty{display:none}
+#rgStage{max-width:100%}
+.rgsel{position:absolute;border:2px solid #2563eb;background:rgba(37,99,235,.18);pointer-events:none}
+#xtract textarea{width:100%;min-height:160px;font:13px/1.4 monospace;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:10px}
+html,body{overscroll-behavior-y:none}
+button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
+.og{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
+.oc{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:5px;text-align:center}
+.oc.sel{border-color:var(--accent)}
+.oth{width:100%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.oc .on{font-size:.72rem;color:var(--muted);margin:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oct{display:flex;gap:3px}
+.oct button{width:auto;flex:1;padding:5px 0;border-radius:7px;background:transparent;color:var(--text);border:1px solid var(--line)}
+.oct button.d{color:#b3261e}
+.oct svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;display:block;margin:auto;pointer-events:none}
+.rbox{position:absolute;border:1px solid rgba(37,99,235,.6);background:rgba(37,99,235,.08);cursor:pointer}
+.rbox.sel{background:rgba(37,99,235,.32);border-width:2px}
+#tStage{position:relative;margin:10px auto 0;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.3);max-width:100%}
+.eb{display:flex;flex-direction:column;gap:5px;flex:0 0 auto}
+.eb button{padding:6px 10px!important;font-size:.78rem;border-radius:8px;background:transparent;color:var(--text);border:1px solid var(--line)}
+.eb button.d{color:#b3261e}
+.egrp{border-bottom:1px solid var(--line);padding:8px 0}
+.egrp summary{cursor:pointer;padding:4px 0}
+.egrp .t{width:100%}
+.elstage{position:relative;margin:0 auto 12px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.3);max-width:100%}
+.ob{position:absolute;border:1px dashed rgba(37,99,235,.8);cursor:pointer}
+.hl{position:absolute;border:3px solid #e11d48;background:rgba(225,29,72,.2);box-shadow:0 0 0 2px rgba(255,255,255,.7);pointer-events:none}
+.xrow.sel{background:var(--accentbg)}
+#elStick{padding:6px 8px;margin-bottom:8px}
+#elStick .tools{gap:4px;flex-wrap:nowrap;align-items:center}
+#tPanel .tools,#cPanel .tools{flex-wrap:wrap}
+#elStick>div:not(.tools):not(.hide){margin-top:6px;padding-top:6px}
+#elStick button.t{padding:6px 8px;font-size:.8rem}
+#elStick .note{font-size:.78rem;margin:4px 0 0}
+#tList .xin{padding:6px 8px;margin-bottom:4px;font-size:.9rem}
+#tPanel .tools{flex-wrap:nowrap}
+#tOpts{flex-wrap:wrap!important}
+#elType{font:inherit;font-size:.85rem;padding:7px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);flex:1 1 auto;min-width:0}
+.ib{width:36px;height:34px;padding:0!important;flex:0 0 auto!important;display:flex!important;align-items:center;justify-content:center;position:relative}
+.ib svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.ib i{font-style:normal;position:absolute;right:2px;bottom:0;font-size:.6rem;font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>PDF Toolkit</h1>
+<p class="sub">Runs entirely in your browser. Your file never leaves this device.</p>
+
+<div id="restore" class="card hide"><b>Restore your last session?</b><div class="muted" id="rsInfo" style="margin:4px 0 12px"></div><div class="tools"><button class="t" id="rsYes">Restore</button><button class="t g" id="rsNo">Discard</button></div></div>
+<p id="err" class="err hide"></p>
+<button type="button" class="drop" id="drop">
+<b>Choose a PDF</b><span>or drop it here</span>
+</button>
+<input type="file" id="file" accept="application/pdf,.pdf" class="hide">
+
+<div id="busyA" class="card hide muted">Analyzing…</div>
+
+<div id="tabs" class="tabs hide"><button class="tab sel" data-v="c">Compress</button><button class="tab" data-v="e">Sign &amp; edit</button><button class="tab" data-v="o">Pages</button><button class="tab" data-v="l">Elements</button><button class="tabx" id="newFile">← New file</button></div>
+
+<div id="panel" class="hide">
+<div class="card">
+<div class="row"><b id="fname" style="word-break:break-all"></b><span id="fsize" class="muted" style="white-space:nowrap"></span></div>
+<div class="muted" id="fmeta" style="margin-top:4px"></div>
+</div>
+<div id="levels"></div>
+<button id="go">Compress</button>
+<p class="note">Text, fonts and vector graphics stay untouched. Only embedded images are downsampled and re-encoded as JPEG. Estimates are approximate; the real result is shown when done.</p>
+</div>
+
+<div id="editor" class="hide">
+<div class="stick"><div class="tools"><button class="t" id="addSig">Signature</button><button class="t" id="addTxt">Text box</button><button class="t" id="addMono">Mono box</button></div>
+<div class="tools"><button class="t" id="eSave">Save PDF</button><button class="t g" id="eCompress">Go to Compress</button></div>
+<p class="note" id="enote"></p>
+<div id="sigTray" class="hide"></div>
+<div id="sel" class="hide"><div class="tools fmt"><select id="pFont"><option>Helvetica</option><option>Times</option><option>Courier</option></select><label id="pFsW" class="muted">Size <input type="number" id="pFs" min="4" max="96" style="width:58px"></label><label id="pCW" class="muted">Cells <input type="number" id="pCells" min="0" max="80" placeholder="auto" style="width:58px"></label><button class="t g f" id="pB"><b>B</b></button><button class="t g f" id="pI"><i>I</i></button><button class="t g f" id="pU"><u>U</u></button><span id="pAl"><button class="t g f" data-a="left"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg></button><button class="t g f" data-a="center"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M5 18h14"/></svg></button><button class="t g f" data-a="right"><svg viewBox="0 0 24 24"><path d="M4 6h16M10 12h10M6 18h14"/></svg></button></span><input type="color" id="pColor" value="#000000"><span id="pRotW" class="hide" style="display:flex;gap:6px;align-items:center"><button class="t g f" id="pRL" aria-label="Rotate left 90"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v5h5"/></svg></button><button class="t g f" id="pRR" aria-label="Rotate right 90"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg></button><input type="range" id="pRot" min="-180" max="180" value="0" style="width:120px"><span class="muted" id="pRotV" style="min-width:38px"></span></span></div></div></div>
+<p class="note">Tap an item to select it: drag its Move tab to reposition and the round corner handle to resize. Mono box: stretch it over a form field; letters spread evenly across the width. Set character cells to match the field’s number of squares.</p>
+<p class="note warn hide" id="ewarn">Some pages are rotated; items on them can’t be exported accurately.</p>
+<input type="file" id="sigFile" accept="image/*" class="hide">
+<div id="pages"></div>
+</div>
+
+<div id="sigModal" class="modal hide"><div class="card" style="width:min(560px,100%);margin:0"><b>Draw your signature</b><canvas id="pad"></canvas><div class="tools"><button class="t g" id="padClear">Clear</button><button class="t g" id="padCancel">Cancel</button><button class="t" id="padSave">Save and use</button></div><p class="note">Saved in this browser so you can reuse it.</p></div></div>
+
+<div id="elp" class="hide">
+<div class="stick" id="elStick" style="margin-top:0"><div class="tools" id="elNav"><select id="elType" aria-label="Element type"><option value="img">Images</option><option value="txt">Text</option><option value="ann">Annotations</option><option value="att">Files</option><option value="fnt">Fonts</option><option value="bm">Bookmarks</option><option value="inf">Info</option><option value="cap">Capture</option></select><button class="t g ib" id="elUndo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><i id="elUc"></i></button><button class="t g ib" id="elRedo" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg><i id="elRc"></i></button><span id="elPg" style="display:flex;gap:2px;align-items:center;flex:0 0 auto"><button class="t g ib" id="ePrev" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="muted" id="eLbl" style="min-width:44px;text-align:center;font-size:.82rem"></span><button class="t g ib" id="eNext" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></span></div>
+<div id="tPanel" class="hide"><div id="tList"></div><div class="tools"><button class="t" id="tApply" disabled>Apply</button><button class="t g" id="tDel" disabled>Delete</button><button class="t g ib" id="tCopy" aria-label="Copy text" title="Copy text"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button><button class="t g ib" id="tTxt" aria-label="Save all text as .txt" title="Save all text as .txt"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button></div><div class="tools hide" id="tOpts" style="margin-top:6px"><select id="tFont" class="xin" style="width:auto;margin:0"><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times</option><option value="Courier">Courier</option></select><label class="muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="tFit" checked> Keep width</label></div><p class="note" id="tNote"></p></div>
+<div id="cPanel" class="hide"><div class="tools"><select id="rgDpi" class="xin" style="width:auto;margin:0"><option value="150">150 dpi</option><option value="300" selected>300 dpi</option><option value="600">600 dpi</option></select><button class="t" id="rgPng">Save PNG</button><button class="t g" id="rgPdf">Cropped PDF</button></div></div>
+<p class="note" id="elnote"></p></div>
+<div class="card">
+<div id="e-img" class="hide"></div><div id="e-ann" class="hide"></div><div id="e-att" class="hide"></div><div id="e-bm" class="hide"></div><div id="e-inf" class="hide"></div><div id="e-fnt" class="hide"></div>
+<div id="e-cap" class="hide"><p class="note" style="margin:0 0 6px">Drag on the page to select an area, then save it. PNG is a picture of the area. A cropped PDF keeps vectors and text, but the rest of the page is still inside the file, so don’t use it to hide information.</p><div id="rgStage"></div></div>
+<div id="e-txt" class="hide">
+<p class="note">Tap text on the page to select it. Each box is one piece of text as stored in the file. Edited text uses the original font when it contains every character you typed, otherwise a standard font (the dropdown). Deleted text is removed from the page. Text inside images can’t be edited.</p>
+<div id="tStage"></div>
+</div>
+</div>
+<input type="file" id="eImgFile" accept="image/*" class="hide">
+</div>
+
+<div id="orgp" class="hide">
+<div class="stick"><div class="tools"><button class="t" id="oAdd">Add PDFs</button><button class="t g" id="oBlank">Insert blank</button><button class="t g" id="oUndo">Undo</button></div>
+<div class="tools"><button class="t" id="oApply">Apply</button><button class="t g" id="oSave">Apply &amp; save</button></div>
+<div id="oMove" class="hide"><div class="tools"><span class="muted">Move page <b id="oSelN"></b> to</span><input type="number" id="oTo" min="1" style="width:64px"><button class="t g" id="oGo" style="flex:0 0 auto;width:auto;padding:8px 14px">Go</button></div></div>
+<p class="note" id="onote"></p></div>
+<p class="note" id="oinfo"></p>
+<div class="card"><b>Save pages</b><p class="note" style="margin:4px 0 8px">Exports from the current document (tap Apply first if you changed the page order).</p><input class="xin" id="pgRange" placeholder="Pages, e.g. 1-3, 5, 8- (empty = all)"><div class="tools"><button class="t" id="pgOne">Save as one PDF</button><button class="t g" id="pgZip">Each page separately (ZIP)</button></div></div>
+<div id="oGrid" class="og"></div>
+<input type="file" id="oFile" accept="application/pdf,.pdf" multiple class="hide">
+</div>
+
+<div id="prog" class="card hide">
+<div id="ptxt" class="muted">Working…</div>
+<div class="bar"><i id="pbar" style="width:0%"></i></div>
+<p class="note">Keep this tab open and in front until it finishes. Switching apps can pause the work on phones.</p>
+</div>
+
+<div id="result" class="card hide">
+<div class="muted">Compressed size</div>
+<div class="big" id="rsize"></div>
+<div id="rdesc" class="muted" style="margin-bottom:14px"></div>
+<button id="save">Save compressed PDF</button>
+<p class="note" id="rnote"></p>
+<button class="sec" id="again">Compress another file</button>
+</div>
+</main>
+<div id="toast" class="hide" style="position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--text);color:var(--bg);padding:12px 14px;border-radius:10px;text-align:center;font-size:.9rem"></div>
+
+<script>
+const { PDFDocument, PDFName, PDFRawStream, PDFNumber, PDFArray, PDFDict, PDFBool } = PDFLib;
+const $ = id => document.getElementById(id);
+const LEVELS = [
+  { id:'minimal', name:'Minimal', desc:'Near-lossless · images up to 2400 px', edge:2400, q:0.85, bpp:1.9 },
+  { id:'light', name:'Light', desc:'Barely noticeable loss · up to 2000 px', edge:2000, q:0.78, bpp:1.5 },
+  { id:'balanced', name:'Balanced', desc:'Good for screens and email · up to 1600 px', edge:1600, q:0.72, bpp:1.2 },
+  { id:'strong', name:'Strong', desc:'Smaller, softer images · up to 1200 px', edge:1200, q:0.55, bpp:0.8 },
+  { id:'max', name:'Maximum', desc:'Smallest file, visible loss · up to 800 px', edge:800, q:0.40, bpp:0.5 }
+];
+let state = { bytes:null, name:'', images:[], total:0, ests:[], rec:null, sel:null, out:null };
+
+const fmt = n => n >= 1048576 ? (n/1048576).toFixed(n>=10485760?1:2)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+const N = s => PDFName.of(s);
+function showErr(m){ const e=$('err'); e.textContent=m; e.classList.toggle('hide',!m); }
+const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+function silence(){
+  const n=8000, b=new Uint8Array(44+n), v=new DataView(b.buffer), w=(o,s)=>[...s].forEach((c,i)=>b[o+i]=c.charCodeAt(0));
+  w(0,'RIFF'); v.setUint32(4,36+n,true); w(8,'WAVEfmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,8000,true); v.setUint32(28,8000,true); v.setUint16(32,1,true); v.setUint16(34,8,true); w(36,'data'); v.setUint32(40,n,true); b.fill(128,44);
+  let s=''; b.forEach(x=>s+=String.fromCharCode(x)); return 'data:audio/wav;base64,'+btoa(s);
+}
+async function keepAlive(){
+  const undo=[];
+  try{ const a=new Audio(silence()); a.loop=true; a.volume=.01; await a.play(); undo.push(()=>a.pause()); }catch(e){}
+  try{
+    let wl=null; const get=async()=>{ try{ wl=await navigator.wakeLock.request('screen'); }catch(e){} };
+    await get(); const vc=()=>{ if(document.visibilityState==='visible') get(); };
+    document.addEventListener('visibilitychange',vc);
+    undo.push(()=>{ document.removeEventListener('visibilitychange',vc); if(wl) wl.release().catch(()=>{}); });
+  }catch(e){}
+  if(navigator.locks){ let rel; const p=new Promise(r=>rel=r); navigator.locks.request('pdftk-work',()=>p).catch(()=>{}); undo.push(rel); }
+  return ()=>undo.forEach(f=>{ try{ f(); }catch(e){} });
+}
+const num = (d,k) => { const v = d.lookup(N(k)); return v instanceof PDFNumber ? v.asNumber() : undefined; };
+
+function filterOf(d){
+  let f = d.lookup(N('Filter'));
+  if (f instanceof PDFArray){ if (f.size()!==1) return null; f = f.lookup(0); }
+  return f ? f.toString() : '';
+}
+function parmsOf(d){
+  let p = d.lookup(N('DecodeParms'));
+  if (p instanceof PDFArray) p = p.size()===1 ? p.lookup(0) : null;
+  return p instanceof PDFDict ? p : null;
+}
+function comps(d){
+  const cs = d.lookup(N('ColorSpace'));
+  const m = s => ({'/DeviceRGB':3,'/CalRGB':3,'/DeviceGray':1,'/CalGray':1})[s] || null;
+  if (cs instanceof PDFName) return m(cs.toString());
+  if (cs instanceof PDFArray){
+    const k = cs.lookup(0).toString();
+    if (k==='/ICCBased'){ const st = cs.lookup(1); const n = st && st.dict ? num(st.dict,'N') : null; return n===3||n===1 ? n : null; }
+    return m(k);
+  }
+  return null;
+}
+function collect(doc){
+  const out = [];
+  for (const [ref,obj] of doc.context.enumerateIndirectObjects()){
+    if (!(obj instanceof PDFRawStream)) continue;
+    const d = obj.dict;
+    if (d.lookup(N('Subtype'))?.toString() !== '/Image') continue;
+    const w = num(d,'Width'), h = num(d,'Height'), bytes = obj.contents.length;
+    const f = filterOf(d), cs = comps(d), par = parmsOf(d);
+    const pred = par ? (num(par,'Predictor')||1) : 1;
+    const bpc = num(d,'BitsPerComponent');
+    const mask = d.lookup(N('ImageMask')) === PDFBool.True;
+    let ok = w && h && cs && !mask && !d.has(N('Mask')) && !d.has(N('Decode')) && w*h >= 20000 && bytes >= 8000;
+    if (ok && f==='/FlateDecode') ok = bpc===8 && (pred===1 || pred>=10);
+    else if (ok && f!=='/DCTDecode') ok = false;
+    out.push({ ref, w, h, bytes, f, cs, pred, ok:!!ok, smask:d.get(N('SMask')) });
+  }
+  return out;
+}
+
+function estimate(lv){
+  let t = state.total;
+  for (const im of state.images){
+    if (!im.ok) continue;
+    const s = Math.min(1, lv.edge/Math.max(im.w,im.h));
+    const est = im.w*s*im.h*s*lv.bpp/8;
+    t -= Math.max(0, im.bytes - Math.min(im.bytes, est));
+  }
+  return t;
+}
+
+function md5(data){
+  const K=new Uint32Array(64), S=[7,12,17,22,5,9,14,20,4,11,16,23,6,10,15,21];
+  for(let i=0;i<64;i++) K[i]=Math.floor(Math.abs(Math.sin(i+1))*4294967296)>>>0;
+  const n=data.length, len=((n+8>>6)+1)<<6, b=new Uint8Array(len); b.set(data); b[n]=0x80;
+  const dv=new DataView(b.buffer); dv.setUint32(len-8,(n*8)>>>0,true); dv.setUint32(len-4,Math.floor(n/536870912),true);
+  let a0=0x67452301,b0=0xefcdab89,c0=0x98badcfe,d0=0x10325476;
+  for(let o=0;o<len;o+=64){
+    const M=new Uint32Array(16); for(let i=0;i<16;i++) M[i]=dv.getUint32(o+i*4,true);
+    let A=a0,B=b0,C=c0,D=d0;
+    for(let i=0;i<64;i++){
+      let F,g;
+      if(i<16){F=(B&C)|(~B&D);g=i;} else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;} else if(i<48){F=B^C^D;g=(3*i+5)%16;} else {F=C^(B|~D);g=(7*i)%16;}
+      F=(F+A+K[i]+M[g])>>>0; A=D; D=C; C=B;
+      const s=S[(i>>4)*4+(i&3)]; B=(B+(((F<<s)|(F>>>(32-s)))>>>0))>>>0;
+    }
+    a0=(a0+A)>>>0; b0=(b0+B)>>>0; c0=(c0+C)>>>0; d0=(d0+D)>>>0;
+  }
+  const out=new Uint8Array(16), ov=new DataView(out.buffer); [a0,b0,c0,d0].forEach((v,i)=>ov.setUint32(i*4,v,true)); return out;
+}
+function rc4(key,data){ const S=new Uint8Array(256); for(let i=0;i<256;i++)S[i]=i; let j=0; for(let i=0;i<256;i++){ j=(j+S[i]+key[i%key.length])&255; [S[i],S[j]]=[S[j],S[i]]; } const out=new Uint8Array(data.length); let a=0,b=0; for(let k=0;k<data.length;k++){ a=(a+1)&255; b=(b+S[a])&255; [S[a],S[b]]=[S[b],S[a]]; out[k]=data[k]^S[(S[a]+S[b])&255]; } return out; }
+const PAD=Uint8Array.from([0x28,0xBF,0x4E,0x5E,0x4E,0x75,0x8A,0x41,0x64,0x00,0x4E,0x56,0xFF,0xFA,0x01,0x08,0x2E,0x2E,0x00,0xB6,0xD0,0x68,0x3E,0x80,0x2F,0x0C,0xA9,0xFE,0x64,0x53,0x69,0x7A]);
+function deriveKey(O,P,id0,R,len,encMeta){
+  const inp=[...PAD,...O.slice(0,32),P&255,(P>>8)&255,(P>>16)&255,(P>>24)&255,...id0]; if(R>=4&&!encMeta) inp.push(255,255,255,255);
+  let h=md5(Uint8Array.from(inp)); if(R>=3) for(let i=0;i<50;i++) h=md5(h.slice(0,len)); return h.slice(0,len);
+}
+function checkU(key,U,id0,R){
+  let x; if(R===2) x=rc4(key,PAD); else { x=rc4(key,md5(Uint8Array.from([...PAD,...id0]))); for(let i=1;i<=19;i++) x=rc4(key.map(b=>b^i),x); }
+  const n=R===2?32:16; return x.slice(0,n).every((v,i)=>v===U[i]);
+}
+
+async function decryptPdf(doc){
+  const ctx=doc.context, encRef=ctx.trailerInfo.Encrypt, enc=ctx.lookup(encRef);
+  if(!(enc instanceof PDFDict)) throw new Error('The encryption settings are unreadable.');
+  const V=num(enc,'V')||0, R=num(enc,'R')||0, P=num(enc,'P')||0;
+  if(enc.lookup(N('Filter'))?.toString()!=='/Standard'||V<1||V>4||R<2||R>4) throw new Error(`This PDF uses an encryption type this app can\u2019t decrypt yet (V${V}, R${R}).`);
+  let len=V===1?5:(num(enc,'Length')||40)/8, sM='RC4', tM='RC4';
+  if(V===4){
+    len=16; const cf=enc.lookup(N('CF'));
+    const m=k=>{ const nm=enc.lookup(N(k))?.toString().slice(1)||'Identity'; if(nm==='Identity') return null; const c=cf?.lookup(N(nm))?.lookup(N('CFM'))?.toString(); return c==='/AESV2'?'AES':c==='/V2'?'RC4':'?'; };
+    sM=m('StmF'); tM=m('StrF'); if(sM==='?'||tM==='?') throw new Error('Unsupported encryption method.');
+  }
+  const sb=k=>enc.lookup(N(k)).asBytes(), idA=ctx.trailerInfo.ID, id0=idA instanceof PDFArray?idA.lookup(0).asBytes():new Uint8Array(0);
+  const encMeta=enc.lookup(N('EncryptMetadata'))!==PDFBool.False;
+  const key=deriveKey(sb('O'),P,id0,R,len,encMeta);
+  if(!checkU(key,sb('U'),id0,R)) throw new Error('This PDF needs a password to open.');
+  const objKey=(ref,aes)=>{ const n=ref.objectNumber, g=ref.generationNumber, a=[...key,n&255,(n>>8)&255,(n>>16)&255,g&255,(g>>8)&255]; if(aes) a.push(0x73,0x41,0x6C,0x54); return md5(Uint8Array.from(a)).slice(0,Math.min(key.length+5,16)); };
+  const dec=async(data,k,m)=>{
+    if(m==='RC4') return rc4(k,data);
+    if(data.length<32||(data.length-16)%16) return data.length<32?new Uint8Array(0):data;
+    const ck=await crypto.subtle.importKey('raw',k,'AES-CBC',false,['decrypt']);
+    return new Uint8Array(await crypto.subtle.decrypt({name:'AES-CBC',iv:data.slice(0,16)},ck,data.slice(16)));
+  };
+  const hex=d=>Array.from(d,b=>b.toString(16).padStart(2,'0')).join('');
+  const walk=async(o,k,m)=>{
+    if(o instanceof PDFLib.PDFString||o instanceof PDFLib.PDFHexString){ try{ return PDFLib.PDFHexString.of(hex(await dec(o.asBytes(),k,m))); }catch(e){ return o; } }
+    if(o instanceof PDFArray){ for(let i=0;i<o.size();i++){ const v=o.get(i), r=await walk(v,k,m); if(r!==v) o.set(i,r); } }
+    else if(o instanceof PDFDict){ for(const [kk,v] of o.entries()){ const r=await walk(v,k,m); if(r!==v) o.set(kk,r); } }
+    return o;
+  };
+  let n=0;
+  for(const [ref,obj] of ctx.enumerateIndirectObjects()){
+    if(ref.toString()===encRef.toString()) continue;
+    if(++n%200===0) await tick();
+    if(tM) await walk(obj instanceof PDFRawStream?obj.dict:obj,tM==='AES'?objKey(ref,true):objKey(ref,false),tM);
+    if(obj instanceof PDFRawStream&&sM){
+      const ty=obj.dict.lookup(N('Type'))?.toString(), fl=obj.dict.lookup(N('Filter'))?.toString()||'';
+      if(ty==='/XRef'||(ty==='/Metadata'&&!encMeta)||fl.includes('/Crypt')) continue;
+      try{ ctx.assign(ref,PDFRawStream.of(obj.dict,await dec(obj.contents,objKey(ref,sM==='AES'),sM))); }catch(e){}
+    }
+  }
+  ctx.trailerInfo.Encrypt=undefined; ctx.delete(encRef);
+  return doc.save();
+}
+
+async function load(file){
+  if(!/\.pdf$/i.test(file.name) && file.type!=='application/pdf'){ showErr('Please choose a PDF file (.pdf).'); return; }
+  $('restore').classList.add('hide'); $('busyA').textContent='Analyzing…'; showErr(''); $('drop').classList.add('hide'); $('busyA').classList.remove('hide');
+  try{
+    let bytes = new Uint8Array(await file.arrayBuffer());
+    if(String.fromCharCode(...bytes.slice(0,1024)).indexOf('%PDF')<0) throw new Error('This doesn’t look like a valid PDF.');
+    let doc = await PDFDocument.load(bytes, { ignoreEncryption:true, updateMetadata:false });
+    if (doc.isEncrypted){
+      $('busyA').textContent='Decrypting\u2026'; await tick();
+      bytes = await decryptPdf(doc);
+      doc = await PDFDocument.load(bytes, { ignoreEncryption:true, updateMetadata:false });
+      if (doc.isEncrypted) throw new Error('Decryption didn\u2019t work.');
+      toast('This PDF had no password but was encrypted with restrictions. The working copy is unencrypted, so those restrictions no longer apply to it.');
+    }
+    const images = collect(doc);
+    Object.assign(state, { bytes, name:file.name, images, total:bytes.length });
+    const imgBytes = images.reduce((a,i)=>a+i.bytes,0);
+    const ok = images.filter(i=>i.ok);
+    $('fname').textContent = file.name; $('fsize').textContent = fmt(bytes.length);
+    $('fmeta').textContent = `${doc.getPageCount()} pages · ${images.length} images (${Math.round(100*imgBytes/bytes.length)}% of file) · ${ok.length} can be compressed`;
+    state.ests = LEVELS.map(estimate);
+    const lab={'/JPXDecode':'JPEG 2000','/JBIG2Decode':'JBIG2','/CCITTFaxDecode':'CCITT'}, sk=images.filter(i=>lab[i.f]);
+    if(sk.length) $('fmeta').textContent+=` \u00b7 ${sk.length} already ${[...new Set(sk.map(i=>lab[i.f]))].join('/')} (already efficient, left as-is)`;
+    const save = state.ests.map(e => state.total - e);
+    const best = Math.max(...save);
+    state.rec = null;
+    if (best > state.total*0.05){
+      state.rec = LEVELS.findIndex((_,i) => i<LEVELS.length-1 && save[i] >= 0.75*best);
+      if (state.rec < 0) state.rec = LEVELS.length-1;
+    }
+    state.sel = state.rec ?? 2;
+    renderLevels();
+    $('busyA').classList.add('hide'); $('tabs').classList.remove('hide'); resetX(); show('c'); guardOn(); await initEditor(); idb.set('file',{name:file.name,bytes,ts:Date.now()}).catch(()=>{}); touch();
+    if (state.rec===null){
+      $('fmeta').innerHTML += '<br><span class="warn">Few compressible images found — expect little or no reduction.</span>';
+    }
+  }catch(e){
+    $('busyA').classList.add('hide'); $('drop').classList.remove('hide');
+    showErr('Couldn’t read this PDF: ' + (e.message||e));
+  }
+}
+
+function renderLevels(){
+  $('levels').innerHTML = '';
+  LEVELS.forEach((lv,i)=>{
+    const e = state.ests[i], pct = Math.round(100*(1-e/state.total));
+    const el = document.createElement('label');
+    el.className = 'lvl' + (state.sel===i?' sel':'');
+    el.innerHTML = `<input type="radio" name="lv" ${state.sel===i?'checked':''}>
+      <div class="row"><span class="name">${lv.name}${state.rec===i?'<span class="badge">RECOMMENDED</span>':''}</span><span class="size">≈ ${fmt(e)}</span></div>
+      <div class="row muted"><span>${lv.desc}</span><span>${pct>0?'−'+pct+'%':'no change'}</span></div>
+      <div class="bar"><i style="width:${Math.max(2,100*e/state.total)}%"></i></div>`;
+    el.onclick = () => { state.sel = i; renderLevels(); };
+    $('levels').appendChild(el);
+  });
+}
+
+function canvas(w,h){ const c = document.createElement('canvas'); c.width=w; c.height=h; return c; }
+
+async function inflate(u8){
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+function unpredict(d,w,h,bpp,rb){
+  const stride = rb||w*bpp, o = new Uint8Array(stride*h);
+  for (let y=0;y<h;y++){
+    const ft = d[y*(stride+1)], rs = y*(stride+1)+1, os = y*stride;
+    for (let x=0;x<stride;x++){
+      const raw = d[rs+x];
+      const a = x>=bpp ? o[os+x-bpp] : 0, b = y ? o[os-stride+x] : 0, c = (x>=bpp&&y) ? o[os-stride+x-bpp] : 0;
+      let v;
+      if (ft===0) v=raw; else if (ft===1) v=raw+a; else if (ft===2) v=raw+b; else if (ft===3) v=raw+((a+b)>>1);
+      else { const p=a+b-c, pa=Math.abs(p-a), pb=Math.abs(p-b), pc=Math.abs(p-c); v = raw + (pa<=pb&&pa<=pc ? a : pb<=pc ? b : c); }
+      o[os+x] = v & 255;
+    }
+  }
+  return o;
+}
+
+async function recode(im, obj, lv){
+  let src, sw, sh;
+  if (im.f==='/DCTDecode'){
+    const bmp = await createImageBitmap(new Blob([obj.contents],{type:'image/jpeg'}), { imageOrientation:'none' });
+    src = bmp; sw = bmp.width; sh = bmp.height;
+  } else {
+    let raw = await inflate(obj.contents);
+    if (im.pred>=10) raw = unpredict(raw, im.w, im.h, im.cs);
+    if (raw.length < im.w*im.h*im.cs) return null;
+    const id = new ImageData(im.w, im.h), px = id.data, n = im.w*im.h;
+    if (im.cs===3) for (let i=0,j=0,k=0;i<n;i++){ px[j++]=raw[k++]; px[j++]=raw[k++]; px[j++]=raw[k++]; px[j++]=255; }
+    else for (let i=0,j=0;i<n;i++){ const g=raw[i]; px[j++]=g; px[j++]=g; px[j++]=g; px[j++]=255; }
+    const c = canvas(im.w, im.h); c.getContext('2d').putImageData(id,0,0);
+    src = c; sw = im.w; sh = im.h;
+  }
+  const s = Math.min(1, lv.edge/Math.max(sw,sh));
+  const tw = Math.max(1,Math.round(sw*s)), th = Math.max(1,Math.round(sh*s));
+  let cur = src, cw = sw, ch = sh;
+  while (cw/2 >= tw && ch/2 >= th){
+    const nw = Math.ceil(cw/2), nh = Math.ceil(ch/2), c = canvas(nw,nh), x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high'; x.drawImage(cur,0,0,nw,nh); cur = c; cw = nw; ch = nh;
+  }
+  const c = canvas(tw,th), x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0,0,tw,th); x.imageSmoothingQuality = 'high'; x.drawImage(cur,0,0,tw,th);
+  if (src.close) src.close();
+  const blob = await new Promise(r => c.toBlob(r,'image/jpeg',lv.q));
+  return blob ? { data:new Uint8Array(await blob.arrayBuffer()), w:tw, h:th } : null;
+}
+
+async function run(){
+  const lv = LEVELS[state.sel];
+  $('panel').classList.add('hide'); $('prog').classList.remove('hide');
+  const stop = await keepAlive();
+  try{
+    const doc = await PDFDocument.load(state.bytes, { ignoreEncryption:true, updateMetadata:false });
+    const imgs = collect(doc).filter(i=>i.ok);
+    let done = 0, replaced = 0;
+    for (const im of imgs){
+      $('ptxt').textContent = `Compressing image ${done+1} of ${imgs.length}…`;
+      $('pbar').style.width = (100*done/Math.max(1,imgs.length)) + '%';
+      await tick();
+      try{
+        const obj = doc.context.lookup(im.ref);
+        const r = await recode(im, obj, lv);
+        if (r && r.data.length < obj.contents.length*0.95){
+          const spec = { Type:'XObject', Subtype:'Image', Width:r.w, Height:r.h, ColorSpace:'DeviceRGB', BitsPerComponent:8, Filter:'DCTDecode', Length:r.data.length };
+          const d = doc.context.obj(spec);
+          if (im.smask) d.set(N('SMask'), im.smask);
+          doc.context.assign(im.ref, PDFRawStream.of(d, r.data));
+          replaced++;
+        }
+      }catch(e){ console.warn('skip image', e); }
+      done++;
+    }
+    $('ptxt').textContent = 'Saving…'; $('pbar').style.width = '100%'; await tick();
+    let out = await doc.save({ useObjectStreams:true });
+    if(items.length){ $('ptxt').textContent='Adding signatures and text…'; await tick(); out = await buildEdited(out); }
+    state.out = out;
+    $('prog').classList.add('hide'); $('result').classList.remove('hide');
+    const pct = Math.round(100*(1-out.length/state.total));
+    if (out.length >= state.total){
+      state.out = null;
+      $('rsize').textContent = fmt(state.total);
+      $('rdesc').textContent = 'No smaller than the original — this file is already well optimized. Try a stronger level.';
+      $('save').classList.add('hide');
+    } else {
+      $('save').classList.remove('hide');
+      $('rsize').textContent = fmt(out.length);
+      $('rdesc').textContent = `${pct}% smaller than ${fmt(state.total)} · ${replaced} of ${imgs.length} images recompressed (${lv.name})`;
+    }
+  }catch(e){
+    $('prog').classList.add('hide'); $('panel').classList.remove('hide');
+    showErr('Compression failed: ' + (e.message||e));
+  } finally { stop(); }
+}
+
+async function saveBytes(out, name, note){
+  note.textContent = '';
+  try{
+    const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+    if (dl){
+      await dl.save({ filename:name, data:out.slice().buffer });
+      note.textContent = 'Saved.';
+      return;
+    }
+    const file = new File([out], name, { type:mime(name) });
+    if (navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:name });
+      note.textContent = 'Shared.';
+      return;
+    }
+    const url = URL.createObjectURL(file), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    note.textContent = 'Download started. If nothing happened, this view blocks downloads: open the artifact link in a desktop browser.';
+  }catch(e){
+    note.textContent = e && e.code==='declined' ? 'Save cancelled.' : 'Couldn’t save: ' + ((e && (e.message||e.code)) || e);
+  }
+}
+
+const save = () => saveBytes(state.out, state.name.replace(/\.pdf$/i,'') + '-compressed.pdf', $('rnote'));
+
+/* ---------- Sign & edit ---------- */
+function show(v){
+  ['panel','prog','result','editor','orgp','elp'].forEach(i=>$(i).classList.add('hide'));
+  $(v==='e'?'editor':v==='o'?'orgp':v==='l'?'elp':'panel').classList.remove('hide');
+  if(v==='l') elInit();
+  if(v==='o'&&!org) initOrg();
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('sel',t.dataset.v===v));
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.v));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let pdfDoc=null, pgs=[], items=[], cur=null, io=null;
+let sigs=[]; const SK='pdftk_sigs';
+try{ sigs=JSON.parse(localStorage.getItem(SK)||'[]'); }catch(e){}
+const persist=()=>{ try{ localStorage.setItem(SK,JSON.stringify(sigs)); }catch(e){} };
+
+async function initEditor(){
+  items=[]; cur=null; pgs=[]; $('pages').innerHTML=''; $('sel').classList.add('hide'); $('sigTray').classList.add('hide'); $('enote').textContent=''; $('ewarn').classList.add('hide');
+  if(io) io.disconnect();
+  try{
+    if(pdfDoc) pdfDoc.destroy();
+    pdfDoc = await pdfjsLib.getDocument({data:state.bytes.slice()}).promise;
+    const W = Math.min(document.querySelector('main').clientWidth-32, 800);
+    io = new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ io.unobserve(en.target); drawPg(en.target._p); } }),{rootMargin:'800px'});
+    for(let n=1;n<=pdfDoc.numPages;n++){
+      const page = await pdfDoc.getPage(n), v = page.view, rot = (page.rotate||0)%360;
+      let wpt=v[2]-v[0], hpt=v[3]-v[1]; if(rot===90||rot===270) [wpt,hpt]=[hpt,wpt];
+      const s=W/wpt, wrap=document.createElement('div');
+      wrap.className='pg'; wrap.style.width=W+'px'; wrap.style.height=hpt*s+'px';
+      const p={n,page,wrap,s,wpt,hpt,view:v,rot,vp:page.getViewport({scale:1})}; wrap._p=p; pgs.push(p); $('pages').appendChild(wrap); io.observe(wrap);
+    }
+  }catch(e){ $('enote').textContent='Couldn’t render the preview: '+(e.message||e); }
+}
+async function drawPg(p){
+  const dpr=Math.min(window.devicePixelRatio||1,2), vp=p.page.getViewport({scale:p.s*dpr}), c=canvas(vp.width,vp.height);
+  c.style.cssText='width:100%;height:100%;display:block';
+  p.wrap.insertBefore(c,p.wrap.firstChild);
+  await p.page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+}
+
+function addItem(type,sig){
+  if(!pgs.length) return;
+  const p = pgs.find(p=>p.wrap.getBoundingClientRect().bottom>innerHeight*.45)||pgs[0];
+  const it={type,p,sig,text:'',fs:12,cells:0,font:'Helvetica',b:false,i:false,u:false,color:'#000000',align:'left',w:type==='text'?200:type==='sig'?150:170,h:type==='mono'?24:60};
+  const place=()=>{
+    const r=p.wrap.getBoundingClientRect();
+    it.x=clamp((p.wpt-it.w)/2,0,Math.max(0,p.wpt-it.w)); it.y=clamp((innerHeight*.45-r.top)/p.s-it.h/2,0,Math.max(0,p.hpt-it.h));
+    build(it); items.push(it); select(it); if(it.inp) it.inp.focus();
+  };
+  if(type==='sig'){ const im=new Image(); im.onload=()=>{ it.h=it.w*im.naturalHeight/im.naturalWidth; place(); }; im.src=sig; } else place();
+}
+function build(it){
+  const el=document.createElement('div'); el.className='it'; it.el=el;
+  el.innerHTML='<div class="ctl"><span class="grip" title="Move" aria-label="Move"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span><span class="x" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="dup" title="Duplicate" aria-label="Duplicate"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></span></div><div class="rz"></div>';
+  let body;
+  if(it.type==='sig'){ body=document.createElement('img'); body.src=it.sig; body.className='sg'; body.draggable=false; drag(body,it,'m'); }
+  else{
+    body=document.createElement(it.type==='text'?'textarea':'input'); body.className=it.type==='text'?'tx':'mono'; body.spellcheck=false;
+    body.placeholder=it.type==='text'?'Type here…':'ABC'; it.inp=body;
+    body.oninput=()=>{ it.text=body.value; layout(it); };
+  }
+  el.insertBefore(body,el.querySelector('.rz'));
+  el.addEventListener('pointerdown',()=>select(it));
+  drag(el.querySelector('.grip'),it,'m'); drag(el.querySelector('.rz'),it,'r');
+  el.querySelector('.x').onclick=()=>del(it); el.querySelector('.dup').onclick=()=>dup(it);
+  it.p.wrap.appendChild(el); layout(it);
+}
+function layout(it){
+  const s=it.p.s, st=it.el.style; touch();
+  if(it.type==='sig'){ const r=it.rot||0; st.transform=`rotate(${r}deg)`; it.el.querySelector('.ctl').style.transform=`rotate(${-r}deg)`; }
+  st.left=it.x*s+'px'; st.top=it.y*s+'px'; st.width=it.w*s+'px'; st.height=it.h*s+'px'; it.el.classList.toggle('below',it.y*s<36);
+  if(it.inp){ const q=it.inp.style; q.fontFamily=FF[it.type==='mono'?'Courier':it.font]; q.fontWeight=it.b?'700':'400'; q.fontStyle=it.i?'italic':'normal'; q.textDecoration=it.u?'underline':'none'; q.color=it.color; q.textAlign=it.align; }
+  if(it.type==='text'){ it.inp.style.fontSize=it.fs*s+'px'; it.inp.style.lineHeight='1.2'; it.inp.style.padding=2*s+'px'; }
+  if(it.type==='mono'){
+    const cw=it.w/(it.cells||Math.max(1,it.text.length)), fs=Math.min(it.h*.75,cw/.6), ls=(cw-fs*.6)*s;
+    Object.assign(it.inp.style,{fontSize:fs*s+'px',letterSpacing:ls+'px',paddingLeft:ls/2+'px'});
+  }
+}
+function drag(h,it,mode){
+  h.addEventListener('pointerdown',e=>{
+    e.preventDefault(); e.stopPropagation(); select(it);
+    const sx=e.clientX, sy=e.clientY, o={x:it.x,y:it.y,w:it.w,h:it.h}; h.setPointerCapture(e.pointerId);
+    const mv=ev=>{
+      const dx=(ev.clientX-sx)/it.p.s, dy=(ev.clientY-sy)/it.p.s;
+      if(mode==='m'){ it.x=clamp(o.x+dx,0,it.p.wpt-it.w); it.y=clamp(o.y+dy,0,it.p.hpt-it.h); }
+      else if(!it.rot){ it.w=clamp(o.w+dx,15,it.p.wpt-it.x); it.h=clamp(o.h+dy,8,it.p.hpt-it.y); }
+      else{
+        const th=it.rot*Math.PI/180, co=Math.cos(th), si=Math.sin(th), lx=dx*co+dy*si, ly=-dx*si+dy*co;
+        const nw=clamp(o.w+lx,15,it.p.wpt), nh=clamp(o.h+ly,8,it.p.hpt), R=(a,b)=>[a*co-b*si,a*si+b*co];
+        const t0=R(-o.w/2,-o.h/2), t1=R(-nw/2,-nh/2), cx=o.x+o.w/2+t0[0]-t1[0], cy=o.y+o.h/2+t0[1]-t1[1];
+        it.w=nw; it.h=nh; it.x=cx-nw/2; it.y=cy-nh/2;
+      }
+      layout(it);
+    };
+    const up=()=>{ h.removeEventListener('pointermove',mv); h.removeEventListener('pointerup',up); h.removeEventListener('pointercancel',up); };
+    h.addEventListener('pointermove',mv); h.addEventListener('pointerup',up); h.addEventListener('pointercancel',up);
+  });
+}
+function select(it){
+  if(cur&&cur!==it) cur.el.classList.remove('sel');
+  cur=it; it.el.classList.add('sel');
+  $('sel').classList.remove('hide'); ['pB','pI','pU','pColor'].forEach(i=>$(i).classList.toggle('hide',it.type==='sig')); $('pRotW').classList.toggle('hide',it.type!=='sig'); $('pRotW').style.display=it.type==='sig'?'flex':'none'; $('pRot').value=it.rot||0; $('pRotV').textContent=(it.rot||0)+'\u00b0';
+  $('pFsW').classList.toggle('hide',it.type!=='text'); $('pCW').classList.toggle('hide',it.type!=='mono');
+  $('pFs').value=it.fs; $('pCells').value=it.cells||'';
+  $('pFont').classList.toggle('hide',it.type!=='text'); $('pAl').classList.toggle('hide',it.type!=='text'); sync();
+}
+function del(it){ it.el.remove(); items=items.filter(i=>i!==it); touch(); if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
+$('pages').addEventListener('pointerdown',e=>{ if(cur&&!e.target.closest('.it')){ cur.el.classList.remove('sel'); cur=null; $('sel').classList.add('hide'); } });
+$('pFs').oninput=e=>{ if(cur){ cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
+$('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
+$('addTxt').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('text'); };
+$('addMono').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('mono'); };
+
+/* signatures */
+function renderTray(){
+  const t=$('sigTray'); t.innerHTML='<div class="muted" style="margin-bottom:10px">Saved signatures — tap one to place it</div><div class="sigs"></div>';
+  const box=t.lastChild;
+  sigs.forEach((d,i)=>{
+    const w=document.createElement('div'); w.className='sgi'; w.innerHTML='<img alt="signature"><span>✕</span>';
+    w.firstChild.src=d; w.onclick=e=>{ if(e.target.tagName==='SPAN'){ sigs.splice(i,1); persist(); renderTray(); } else { addItem('sig',d); t.classList.add('hide'); } };
+    box.appendChild(w);
+  });
+  const b=document.createElement('button'); b.className='t g'; b.style.flex='0 0 auto'; b.textContent='+ New signature'; b.onclick=openPad; box.appendChild(b);
+  const b2=document.createElement('button'); b2.className='t g'; b2.style.flex='0 0 auto'; b2.textContent='Import image'; b2.onclick=()=>$('sigFile').click(); box.appendChild(b2);
+}
+$('addSig').onclick=()=>{ renderTray(); $('sigTray').classList.toggle('hide'); };
+const pad=$('pad'), pc=pad.getContext('2d'); pad.width=1200; pad.height=400;
+let drawing=false, last=null;
+const pt=e=>{ const r=pad.getBoundingClientRect(); return [(e.clientX-r.left)*pad.width/r.width,(e.clientY-r.top)*pad.height/r.height]; };
+function stroke(a,b){ pc.lineWidth=7; pc.lineCap=pc.lineJoin='round'; pc.strokeStyle='#111'; pc.beginPath(); pc.moveTo(a[0],a[1]); pc.lineTo(b[0],b[1]); pc.stroke(); }
+pad.onpointerdown=e=>{ e.preventDefault(); drawing=true; pad.setPointerCapture(e.pointerId); last=pt(e); stroke(last,last); };
+pad.onpointermove=e=>{ if(!drawing) return; const p=pt(e); stroke(last,p); last=p; };
+pad.onpointerup=pad.onpointercancel=()=>{ drawing=false; };
+function openPad(){ pc.clearRect(0,0,pad.width,pad.height); $('sigModal').classList.remove('hide'); }
+const closePad=()=>$('sigModal').classList.add('hide');
+$('padClear').onclick=()=>pc.clearRect(0,0,pad.width,pad.height);
+$('padCancel').onclick=closePad;
+$('padSave').onclick=()=>{
+  const d=pc.getImageData(0,0,pad.width,pad.height).data; let x0=1e9,y0=1e9,x1=-1,y1=-1;
+  for(let y=0;y<pad.height;y++) for(let x=0;x<pad.width;x++) if(d[(y*pad.width+x)*4+3]>10){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  if(x1<0){ closePad(); return; }
+  x0=Math.max(0,x0-8); y0=Math.max(0,y0-8); x1=Math.min(pad.width-1,x1+8); y1=Math.min(pad.height-1,y1+8);
+  const w=x1-x0+1, h=y1-y0+1, c=canvas(w,h); c.getContext('2d').drawImage(pad,x0,y0,w,h,0,0,w,h);
+  const url=c.toDataURL('image/png'); sigs.unshift(url); sigs=sigs.slice(0,12); persist(); closePad(); $('sigTray').classList.add('hide'); addItem('sig',url);
+};
+
+/* export */
+const FF={Helvetica:'Helvetica, Arial, sans-serif',Times:'"Times New Roman", Times, serif',Courier:'"Courier New", Courier, monospace'};
+function stdFont(it){
+  const fam=it.type==='mono'?'Courier':it.font, base=fam==='Times'?'TimesRoman':fam, sl=fam==='Times'?'Italic':'Oblique';
+  return PDFLib.StandardFonts[base+(it.b&&it.i?'Bold'+sl:it.b?'Bold':it.i?sl:'')];
+}
+const hex=h=>{ const n=parseInt(h.slice(1),16); return PDFLib.rgb((n>>16&255)/255,(n>>8&255)/255,(n&255)/255); };
+function sync(){
+  if(!cur) return;
+  $('pB').classList.toggle('on',!!cur.b); $('pI').classList.toggle('on',!!cur.i); $('pU').classList.toggle('on',!!cur.u);
+  document.querySelectorAll('#pAl [data-a]').forEach(b=>b.classList.toggle('on',b.dataset.a===cur.align));
+  $('pColor').value=cur.color; $('pFont').value=cur.font;
+}
+const normR=r=>((r+180)%360+360)%360-180;
+const setRot=r=>{ if(cur&&cur.type==='sig'){ cur.rot=normR(r); $('pRot').value=cur.rot; $('pRotV').textContent=cur.rot+'\u00b0'; layout(cur); } };
+$('pRot').oninput=e=>setRot(+e.target.value);
+$('pRL').onclick=()=>setRot((cur.rot||0)-90); $('pRR').onclick=()=>setRot((cur.rot||0)+90);
+$('pFont').onchange=e=>{ if(cur){ cur.font=e.target.value; layout(cur); } };
+['B','I','U'].forEach(k=>$('p'+k).onclick=()=>{ if(cur){ const f=k.toLowerCase(); cur[f]=!cur[f]; layout(cur); sync(); } });
+$('pAl').onclick=e=>{ const b=e.target.closest('[data-a]'); if(b&&cur){ cur.align=b.dataset.a; layout(cur); sync(); } };
+$('pColor').oninput=e=>{ if(cur){ cur.color=e.target.value; layout(cur); } };
+function dup(it){
+  const c=Object.assign({},it); delete c.el; delete c.inp;
+  c.x=clamp(it.x+12,0,Math.max(0,it.p.wpt-it.w)); c.y=clamp(it.y+12,0,Math.max(0,it.p.hpt-it.h));
+  build(c); if(c.inp){ c.inp.value=c.text; if(c.cells) c.inp.maxLength=c.cells; }
+  items.push(c); select(c);
+}
+async function buildEdited(src){
+  const doc=await PDFDocument.load(src||state.bytes,{ignoreEncryption:true,updateMetadata:false});
+  const pg=doc.getPages(), fc={}, cache={};
+  const clean=(f,t)=>Array.from(t).map(c=>{ try{ f.encodeText(c); return c; }catch(e){ return '?'; } }).join('');
+  for(const it of items){
+    const p=it.p, page=pg[p.n-1], ang=PDFLib.degrees(p.rot||0), P=(dx,dy)=>p.vp.convertToPdfPoint(dx,dy);
+    if(it.type==='sig'){
+      const im=cache[it.sig]||(cache[it.sig]=await doc.embedPng(it.sig));
+      const th=(it.rot||0)*Math.PI/180, co=Math.cos(th), si=Math.sin(th), [bx,by]=P(it.x+it.w/2-it.w/2*co-it.h/2*si, it.y+it.h/2-it.w/2*si+it.h/2*co);
+      page.drawImage(im,{x:bx,y:by,width:it.w,height:it.h,rotate:PDFLib.degrees((p.rot||0)-(it.rot||0))}); continue;
+    }
+    const sn=stdFont(it), F=fc[sn]||(fc[sn]=await doc.embedFont(sn)), color=hex(it.color), fs=it.type==='text'?it.fs:0;
+    const ul=(lx,ly,lw,sz)=>{ const [a,b]=P(lx,ly+sz*.12), [c,d]=P(lx+lw,ly+sz*.12); page.drawLine({start:{x:a,y:b},end:{x:c,y:d},thickness:Math.max(.5,sz*.06),color}); };
+    if(it.type==='text'){
+      const lh=fs*1.2, maxW=it.w-4, out=[];
+      const split=l=>{ const r=[]; while(l.length>1&&F.widthOfTextAtSize(l,fs)>maxW){ let k=l.length-1; while(k>1&&F.widthOfTextAtSize(l.slice(0,k),fs)>maxW) k--; r.push(l.slice(0,k)); l=l.slice(k); } r.push(l); return r; };
+      for(const para of clean(F,it.text).split('\n')){
+        let line='';
+        for(const word of para.split(' ')){
+          const t=line?line+' '+word:word;
+          if(!line||F.widthOfTextAtSize(t,fs)<=maxW) line=t; else{ out.push(...split(line)); line=word; }
+        }
+        out.push(...split(line));
+      }
+      out.forEach((l,i)=>{
+        if(!l) return;
+        const lw=F.widthOfTextAtSize(l,fs), lx=it.align==='center'?it.x+(it.w-lw)/2:it.align==='right'?it.x+it.w-2-lw:it.x+2, ly=it.y+2+fs*.945+i*lh, [X,Y]=P(lx,ly);
+        page.drawText(l,{x:X,y:Y,font:F,size:fs,color,rotate:ang}); if(it.u) ul(lx,ly,lw,fs);
+      });
+    }else{
+      const cells=it.cells||Math.max(1,it.text.length), cw=it.w/cells, sz=Math.min(it.h*.75,cw/.6), by=it.y+(it.h+sz*.57)/2;
+      Array.from(clean(F,it.text)).slice(0,cells).forEach((ch,i)=>{
+        if(ch===' ') return; const cx=it.x+(i+.5)*cw-sz*.3, [X,Y]=P(cx,by);
+        page.drawText(ch,{x:X,y:Y,font:F,size:sz,color,rotate:ang}); if(it.u) ul(cx,by,sz*.6,sz);
+      });
+    }
+  }
+  return doc.save();
+}
+$('eSave').onclick=async()=>{
+  if(!items.length){ $('enote').textContent='Add a signature or text box first.'; return; }
+  $('enote').textContent='Preparing…';
+  try{ const b=await buildEdited(); await saveBytes(b,state.name.replace(/\.pdf$/i,'')+'-edited.pdf',$('enote')); }
+  catch(e){ $('enote').textContent='Couldn’t build the PDF: '+(e.message||e); }
+};
+$('eCompress').onclick=async()=>{
+  try{ const b=items.length?await buildEdited():state.bytes; await load(new File([b],state.name,{type:'application/pdf'})); show('c'); }
+  catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
+};
+
+/* ---------- Extract ---------- */
+const X={scan:0,sec:'img',built:{},doc:null,q:Promise.resolve(),rg:null};
+const mime=n=>({pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jp2:'image/jp2',txt:'text/plain',zip:'application/zip'})[(n.split('.').pop()||'').toLowerCase()]||'application/octet-stream'.replace('octet-stream','octet-stream');
+const xnote=m=>{ $('elnote').textContent=m||''; };
+const base=()=>state.name.replace(/\.pdf$/i,'');
+function resetX(){ EL=null; org=null; $('oGrid').innerHTML=''; X.doc=null; X.q=Promise.resolve(); X.rg=null; $('rgStage').innerHTML=''; }
+const getXDoc=async()=>X.doc||(X.doc=await PDFDocument.load(state.bytes,{ignoreEncryption:true,updateMetadata:false}));
+function ranges(str,max){
+  if(!str.trim()) return Array.from({length:max},(_,i)=>i+1);
+  const out=[];
+  str.split(',').forEach(t=>{
+    t=t.trim(); const m=t.match(/^(\d*)\s*-\s*(\d*)$/); let a,b;
+    if(m){ a=+m[1]||1; b=+m[2]||max; } else if(/^\d+$/.test(t)){ a=b=+t; } else return;
+    a=clamp(a,1,max); b=clamp(b,1,max);
+    for(let i=Math.min(a,b);i<=Math.max(a,b);i++) if(!out.includes(i)) out.push(i);
+  });
+  return out;
+}
+
+/* images */
+function csInfo(d){
+  const nm=x=>x instanceof PDFName?x.toString():'';
+  const simple=x=>({'/DeviceRGB':3,'/CalRGB':3,'/DeviceGray':1,'/CalGray':1,'/DeviceCMYK':4})[nm(x)]||0;
+  const cs=d.lookup(N('ColorSpace'));
+  if(cs instanceof PDFName) return {n:simple(cs)};
+  if(cs instanceof PDFArray){
+    const k=nm(cs.lookup(0));
+    const icc=a=>{ const st=a.lookup(1); return st&&st.dict?num(st.dict,'N')||0:0; };
+    if(k==='/ICCBased') return {n:icc(cs)};
+    if(k==='/Indexed'||k==='/I'){
+      const b=cs.lookup(1); let bn=b instanceof PDFArray?(nm(b.lookup(0))==='/ICCBased'?icc(b):simple(b.lookup(0))):simple(b);
+      const lk=cs.lookup(3), pal=lk&&lk.asBytes?lk.asBytes():lk&&lk.contents?lk.contents:null;
+      return {n:1,idx:true,bn,pal};
+    }
+    return {n:simple(cs.lookup(0))};
+  }
+  return {n:0};
+}
+async function decodeImg(obj){
+  const d=obj.dict, w=num(d,'Width'), h=num(d,'Height'), f=filterOf(d), stencil=d.lookup(N('ImageMask'))===PDFBool.True;
+  const bits=stencil?1:(num(d,'BitsPerComponent')||8), ci=stencil?{n:1}:csInfo(d);
+  if(!w||!h||(f!==''&&f!=='/FlateDecode')||!ci.n||![1,2,4,8,16].includes(bits)) return null;
+  const par=parmsOf(d), pred=par?(num(par,'Predictor')||1):1; if(pred===2) return null;
+  const n=ci.n, rb=Math.ceil(w*n*bits/8), mx=(1<<Math.min(bits,8))-1;
+  let raw=f==='/FlateDecode'?await inflate(obj.contents):obj.contents;
+  if(pred>=10) raw=unpredict(raw,w,h,Math.max(1,Math.ceil(n*bits/8)),rb);
+  if(raw.length<rb*h||(ci.idx&&!ci.pal)) return null;
+  const dec=d.lookup(N('Decode')), inv=stencil&&dec instanceof PDFArray&&dec.lookup(0).asNumber()===1;
+  const S=(x,y,c)=>bits===8?raw[y*rb+x*n+c]:bits===16?raw[y*rb+(x*n+c)*2]:(raw[y*rb+(((x*n+c)*bits)>>3)]>>(8-bits-(((x*n+c)*bits)&7)))&mx;
+  const cm=(c,m,y,k)=>[255*(1-c/255)*(1-k/255),255*(1-m/255)*(1-k/255),255*(1-y/255)*(1-k/255)];
+  const px=new Uint8ClampedArray(w*h*4), pal=ci.pal;
+  for(let y=0;y<h;y++){ if(y%256===0) await tick();
+    for(let x=0;x<w;x++){
+      let r,g,b,a=255;
+      if(stencil){ r=g=b=0; a=((S(x,y,0)===0)!==inv)?255:0; }
+      else if(ci.idx){ const i=S(x,y,0);
+        if(ci.bn===3){ r=pal[i*3]; g=pal[i*3+1]; b=pal[i*3+2]; } else if(ci.bn===1){ r=g=b=pal[i]; } else [r,g,b]=cm(pal[i*4],pal[i*4+1],pal[i*4+2],pal[i*4+3]); }
+      else if(n===1){ r=g=b=S(x,y,0)*255/mx; }
+      else if(n===3){ r=S(x,y,0)*255/mx; g=S(x,y,1)*255/mx; b=S(x,y,2)*255/mx; }
+      else [r,g,b]=cm(S(x,y,0),S(x,y,1),S(x,y,2),S(x,y,3));
+      const o=(y*w+x)*4; px[o]=r; px[o+1]=g; px[o+2]=b; px[o+3]=a;
+    }
+  }
+  return {w,h,rgba:px};
+}
+async function extractImg(obj){
+  const d=obj.dict, f=filterOf(d), sm=d.lookup(N('SMask'));
+  if(f==='/JPXDecode') return {data:obj.contents,ext:'jp2'};
+  if(f==='/DCTDecode'&&!(sm instanceof PDFRawStream)) return {data:obj.contents,ext:'jpg'};
+  let im;
+  if(f==='/DCTDecode'){
+    const bm=await createImageBitmap(new Blob([obj.contents],{type:'image/jpeg'}),{imageOrientation:'none'}), c=canvas(bm.width,bm.height), x=c.getContext('2d');
+    x.drawImage(bm,0,0); im={w:bm.width,h:bm.height,rgba:x.getImageData(0,0,bm.width,bm.height).data};
+  } else im=await decodeImg(obj);
+  if(!im) return null;
+  if(sm instanceof PDFRawStream){
+    const m=await decodeImg(sm);
+    if(m) for(let y=0;y<im.h;y++) for(let x=0;x<im.w;x++) im.rgba[(y*im.w+x)*4+3]=m.rgba[((Math.min(m.h-1,Math.floor(y*m.h/im.h)))*m.w+Math.min(m.w-1,Math.floor(x*m.w/im.w)))*4];
+  }
+  const c=canvas(im.w,im.h); c.getContext('2d').putImageData(new ImageData(im.rgba,im.w,im.h),0,0);
+  const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  return {data:new Uint8Array(await blob.arrayBuffer()),ext:'png'};
+}
+function toRGBA(img){
+  const w=img.width,h=img.height,d=img.data,o=new Uint8ClampedArray(w*h*4);
+  if(d.length>=w*h*4) o.set(d.subarray(0,w*h*4));
+  else if(d.length>=w*h*3) for(let i=0,j=0,k=0;i<w*h;i++){ o[j++]=d[k++]; o[j++]=d[k++]; o[j++]=d[k++]; o[j++]=255; }
+  else { const rb=(w+7)>>3; for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const v=((d[y*rb+(x>>3)]>>(7-(x&7)))&1)?255:0, j=(y*w+x)*4; o[j]=o[j+1]=o[j+2]=v; o[j+3]=255; } }
+  return o;
+}
+function imgCanvas(img){
+  const c=canvas(img.width,img.height), x=c.getContext('2d');
+  if(img.bitmap) x.drawImage(img.bitmap,0,0); else x.putImageData(new ImageData(toRGBA(img),img.width,img.height),0,0);
+  return c;
+}
+async function pageImages(n){
+  const page=await pdfDoc.getPage(n), ol=await page.getOperatorList(), O=pdfjsLib.OPS, imgs=[], boxes=[], st=[];
+  let ctm=[1,0,0,1,0,0];
+  const ml=(a,b)=>[a[0]*b[0]+a[1]*b[2],a[0]*b[1]+a[1]*b[3],a[2]*b[0]+a[3]*b[2],a[2]*b[1]+a[3]*b[3],a[4]*b[0]+a[5]*b[2]+b[4],a[4]*b[1]+a[5]*b[3]+b[5]];
+  for(let i=0;i<ol.fnArray.length;i++){
+    const f=ol.fnArray[i], ar=ol.argsArray[i]; let im=null;
+    if(f===O.save) st.push(ctm.slice());
+    else if(f===O.restore){ if(st.length) ctm=st.pop(); }
+    else if(f===O.transform) ctm=ml(ar,ctm);
+    else if(f===O.paintFormXObjectBegin){ st.push(ctm.slice()); if(ar&&ar[0]) ctm=ml(ar[0],ctm); }
+    else if(f===O.paintFormXObjectEnd){ if(st.length) ctm=st.pop(); }
+    else if(f===O.paintImageXObject){ const id=ar[0], so=String(id).startsWith('g_')?page.commonObjs:page.objs; im=await new Promise(res=>{ let done=false; const t=setTimeout(()=>{ if(!done){ done=true; res(null); } },5000); try{ so.get(id,o=>{ if(!done){ done=true; clearTimeout(t); res(o); } }); }catch(e){ clearTimeout(t); res(null); } }); }
+    else if(f===O.paintInlineImageXObject) im=ar[0];
+    if(im&&im.width&&im.height&&(im.data||im.bitmap)){
+      const xs=[0,1,1,0].map((x,k)=>x*ctm[0]+[0,0,1,1][k]*ctm[2]+ctm[4]), ys=[0,1,1,0].map((x,k)=>x*ctm[1]+[0,0,1,1][k]*ctm[3]+ctm[5]);
+      imgs.push(im); boxes.push([Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]);
+    }
+  }
+  return {page,imgs,boxes};
+}
+/* pages */
+async function pagePdf(src,idx){ const out=await PDFDocument.create(); (await out.copyPages(src,idx.map(i=>i-1))).forEach(p=>out.addPage(p)); return out.save(); }
+$('pgOne').onclick=async()=>{
+  try{ const src=await getXDoc(), idx=ranges($('pgRange').value,src.getPageCount()); if(!idx.length){ $('onote').textContent='No valid pages in that range.'; return; }
+    $('onote').textContent='Working\u2026'; await saveBytes(await pagePdf(src,idx),`${base()}-pages.pdf`,$('onote')); }catch(e){ $('onote').textContent='Failed: '+(e.message||e); }
+};
+$('pgZip').onclick=async()=>{
+  try{ const src=await getXDoc(), idx=ranges($('pgRange').value,src.getPageCount()); if(!idx.length){ $('onote').textContent='No valid pages in that range.'; return; }
+    const z=new JSZip(); for(const n of idx){ $('onote').textContent=`Page ${n}\u2026`; await tick(); z.file(`${base()}-page${n}.pdf`,await pagePdf(src,[n])); }
+    await saveBytes(await z.generateAsync({type:'uint8array'}),`${base()}-pages.zip`,$('onote')); }catch(e){ $('onote').textContent='Failed: '+(e.message||e); }
+};
+
+/* region */
+async function capPage(){
+  if(!pdfDoc){ xnote('Preview isn\u2019t ready yet.'); return; }
+  const r=X.rg=X.rg||{}; r.n=EL.page; r.rect=null; r.s=0;
+  const page=await pdfDoc.getPage(r.n), v=page.view, rot=(page.rotate||0)%360;
+  let wpt=v[2]-v[0], hpt=v[3]-v[1]; if(rot===90||rot===270) [wpt,hpt]=[hpt,wpt];
+  const W=Math.min($('e-cap').clientWidth,800)||300, s=W/wpt, dpr=Math.min(window.devicePixelRatio||1,2), vp=page.getViewport({scale:s*dpr});
+  const st=$('rgStage'); st.innerHTML=''; st.style.width=W+'px'; st.style.height=hpt*s+'px';
+  const c=canvas(vp.width,vp.height); c.style.cssText='width:100%;height:100%;display:block'; st.appendChild(c);
+  const ov=document.createElement('div'); ov.className='rgsel hide'; st.appendChild(ov);
+  Object.assign(r,{page,s,v,rot,ov,hpt,wpt,vp:page.getViewport({scale:1})});
+  await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+}
+$('rgStage').onpointerdown=e=>{
+  const r=X.rg, st=$('rgStage'); if(!r||!r.s) return;
+  const b=st.getBoundingClientRect(), x0=clamp(e.clientX-b.left,0,b.width), y0=clamp(e.clientY-b.top,0,b.height);
+  st.setPointerCapture(e.pointerId); r.ov.classList.remove('hide');
+  const mv=ev=>{
+    const x1=clamp(ev.clientX-b.left,0,b.width), y1=clamp(ev.clientY-b.top,0,b.height), x=Math.min(x0,x1), y=Math.min(y0,y1), w=Math.abs(x1-x0), h=Math.abs(y1-y0);
+    Object.assign(r.ov.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'}); r.rect={x:x/r.s,y:y/r.s,w:w/r.s,h:h/r.s};
+  };
+  const up=()=>{ st.removeEventListener('pointermove',mv); st.removeEventListener('pointerup',up); st.removeEventListener('pointercancel',up); };
+  st.addEventListener('pointermove',mv); st.addEventListener('pointerup',up); st.addEventListener('pointercancel',up);
+};
+const rgOk=()=>{ const r=X.rg; if(r&&r.rect&&r.rect.w>3&&r.rect.h>3) return r; xnote('Drag on the page to select an area first.'); return null; };
+$('rgPng').onclick=async()=>{
+  const r=rgOk(); if(!r) return;
+  try{
+    let sc=(+$('rgDpi').value)/72; const a=r.rect.w*r.rect.h*sc*sc; if(a>5e7) sc*=Math.sqrt(5e7/a);
+    const cw=Math.max(1,Math.round(r.rect.w*sc)), ch=Math.max(1,Math.round(r.rect.h*sc)), c=canvas(cw,ch), x=c.getContext('2d');
+    x.fillStyle='#fff'; x.fillRect(0,0,cw,ch); xnote('Rendering\u2026');
+    await r.page.render({canvasContext:x,viewport:r.page.getViewport({scale:sc}),transform:[1,0,0,1,-r.rect.x*sc,-r.rect.y*sc]}).promise;
+    const blob=await new Promise(f=>c.toBlob(f,'image/png'));
+    await saveBytes(new Uint8Array(await blob.arrayBuffer()),`${base()}-p${r.n}-region.png`,$('elnote'));
+  }catch(e){ xnote('Failed: '+(e.message||e)); }
+};
+$('rgPdf').onclick=async()=>{
+  const r=rgOk(); if(!r) return;
+  try{
+    const doc=await PDFDocument.load(state.bytes,{ignoreEncryption:true,updateMetadata:false});
+    for(let i=doc.getPageCount()-1;i>=0;i--) if(i!==r.n-1) doc.removePage(i);
+    const A=r.vp.convertToPdfPoint(r.rect.x,r.rect.y), B=r.vp.convertToPdfPoint(r.rect.x+r.rect.w,r.rect.y+r.rect.h), x=Math.min(A[0],B[0]), y=Math.min(A[1],B[1]), w=Math.abs(A[0]-B[0]), h=Math.abs(A[1]-B[1]), pg=doc.getPage(0);
+    pg.setMediaBox(x,y,w,h); pg.setCropBox(x,y,w,h);
+    await saveBytes(await doc.save(),`${base()}-p${r.n}-region.pdf`,$('elnote'));
+  }catch(e){ xnote('Failed: '+(e.message||e)); }
+};
+
+/* fonts */
+async function elFonts(){
+  const box=$('e-fnt'); box.innerHTML='<p class="muted">Scanning fonts\u2026</p>';
+  try{
+    const doc=await getXDoc(), seen=new Set(), list=[];
+    for(const [ref,obj] of doc.context.enumerateIndirectObjects()){
+      if(!(obj instanceof PDFDict)||obj.lookup(N('Type'))?.toString()!=='/FontDescriptor') continue;
+      for(const k of ['FontFile','FontFile2','FontFile3']){
+        const st=obj.has(N(k))&&doc.context.lookup(obj.get(N(k)));
+        if(!(st instanceof PDFRawStream)) continue;
+        const name=(obj.lookup(N('FontName'))?.toString()||'/Font').slice(1);
+        if(seen.has(name)) continue; seen.add(name);
+        const sub=st.dict.lookup(N('Subtype'))?.toString();
+        list.push({name,st,ext:k==='FontFile2'?'ttf':k==='FontFile'?'t1':sub==='/OpenType'?'otf':'cff',sub:/^[A-Z]{6}\+/.test(name)});
+      }
+    }
+    if(!list.length){ box.innerHTML='<p class="muted">No embedded font files found. Fonts that aren\u2019t embedded rely on the viewer\u2019s own fonts.</p>'; return; }
+    box.innerHTML='<p class="note" style="margin:0 0 6px">Fonts in PDFs are usually subsets containing only the characters used, and may be licensed. Extracted files often can\u2019t be installed as-is.</p>';
+    list.forEach(it=>{
+      const row=document.createElement('div'); row.className='xrow';
+      row.innerHTML=`<div class="xinfo"><b>${it.name.replace(/</g,'')}</b><br>${it.ext.toUpperCase()} \u00b7 ${fmt(it.st.contents.length)}${it.sub?' \u00b7 subset':''}</div><button>Save</button>`;
+      row.lastChild.onclick=async()=>{
+        const f=filterOf(it.st.dict);
+        if(f!==''&&f!=='/FlateDecode'){ xnote('This font uses an unsupported compression.'); return; }
+        saveBytes(f?await inflate(it.st.contents):it.st.contents,`${it.name}.${it.ext}`,$('elnote'));
+      };
+      box.appendChild(row);
+    });
+  }catch(e){ box.innerHTML='<p class="warn">Couldn\u2019t scan fonts: '+(e.message||e)+'</p>'; }
+}
+
+/* ---------- Session safety ---------- */
+const idb={
+  open:()=>new Promise((res,rej)=>{ const r=indexedDB.open('pdftk',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }),
+  async run(mode,fn){ const d=await this.open(); return new Promise((res,rej)=>{ const t=d.transaction('kv',mode), q=fn(t.objectStore('kv')); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }); },
+  get(k){ return this.run('readonly',o=>o.get(k)); },
+  set(k,v){ return this.run('readwrite',o=>o.put(v,k)); },
+  del(k){ return this.run('readwrite',o=>o.delete(k)); }
+};
+let tT=null;
+function touch(){
+  if(restoring) return; clearTimeout(tT);
+  tT=setTimeout(()=>{ if(!state.bytes) return;
+    idb.set('items',items.map(it=>({type:it.type,n:it.p.n,x:it.x,y:it.y,w:it.w,h:it.h,text:it.text,fs:it.fs,cells:it.cells,font:it.font,b:it.b,i:it.i,u:it.u,color:it.color,align:it.align,sig:it.sig,rot:it.rot}))).catch(()=>{});
+  },400);
+}
+let restoring=false;
+function restoreItems(list){
+  restoring=true;
+  for(const o of list){
+    const p=pgs[o.n-1]; if(!p) continue;
+    const it=Object.assign({},o,{p}); delete it.n; build(it);
+    if(it.inp){ it.inp.value=it.text||''; if(it.cells) it.inp.maxLength=it.cells; layout(it); }
+    items.push(it);
+  }
+  restoring=false; touch();
+}
+(async()=>{
+  try{
+    const f=await idb.get('file'); if(!f||!f.bytes) return; const list=(await idb.get('items'))||[];
+    $('rsInfo').textContent=`${f.name} \u00b7 ${list.length} added item${list.length===1?'':'s'}`;
+    $('restore').classList.remove('hide');
+    $('rsNo').onclick=()=>{ $('restore').classList.add('hide'); idb.del('file').catch(()=>{}); idb.del('items').catch(()=>{}); };
+    $('rsYes').onclick=async()=>{
+      await load(new File([f.bytes],f.name,{type:'application/pdf'}));
+      if(list.length){ restoreItems(list); show('e'); }
+    };
+  }catch(e){}
+})();
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.remove('hide'); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.add('hide'),3500); }
+let gArm=0;
+function guardOn(){ if(guardOn.done) return; guardOn.done=1; try{ history.pushState({g:1},''); }catch(e){} }
+window.addEventListener('popstate',()=>{
+  if(!state.bytes||$('tabs').classList.contains('hide')) return;
+  if(Date.now()<gArm){ history.back(); return; }
+  gArm=Date.now()+3500; try{ history.pushState({g:1},''); }catch(e){}
+  toast('Swipe back again to leave. Your work is saved on this device and can be restored.');
+});
+window.addEventListener('beforeunload',e=>{ if(items.length){ e.preventDefault(); e.returnValue=''; } });
+
+/* ---------- Import signature ---------- */
+$('sigFile').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const bm=await createImageBitmap(f), sc=Math.min(1,800/Math.max(bm.width,bm.height)), w=Math.max(1,Math.round(bm.width*sc)), h=Math.max(1,Math.round(bm.height*sc));
+    const c=canvas(w,h), x=c.getContext('2d'); x.drawImage(bm,0,0,w,h);
+    const id=x.getImageData(0,0,w,h), d=id.data, hist=new Uint32Array(256);
+    for(let i=0;i<d.length;i+=4) hist[Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2])]++;
+    let acc=0, bg=255; for(let v=0;v<256;v++){ acc+=hist[v]; if(acc>=w*h*.9){ bg=Math.max(128,v); break; } }
+    let x0=w,y0=h,x1=-1,y1=-1;
+    for(let i=0;i<d.length;i+=4){
+      const l=Math.min(255,(.299*d[i]+.587*d[i+1]+.114*d[i+2])*255/bg), a=l>=235?0:l>185?(235-l)/50*255:255;
+      d[i+3]=Math.min(d[i+3],a);
+      if(d[i+3]>10){ const px=(i>>2)%w, py=Math.floor((i>>2)/w); if(px<x0)x0=px; if(px>x1)x1=px; if(py<y0)y0=py; if(py>y1)y1=py; }
+    }
+    if(x1<0) throw new Error('empty');
+    x.putImageData(id,0,0);
+    x0=Math.max(0,x0-6); y0=Math.max(0,y0-6); x1=Math.min(w-1,x1+6); y1=Math.min(h-1,y1+6);
+    const cw=x1-x0+1, ch=y1-y0+1, o=canvas(cw,ch); o.getContext('2d').drawImage(c,x0,y0,cw,ch,0,0,cw,ch);
+    const url=o.toDataURL('image/png'); sigs.unshift(url); sigs=sigs.slice(0,12); persist(); $('sigTray').classList.add('hide'); addItem('sig',url);
+  }catch(err){ $('enote').textContent='Couldn\u2019t use that image. Try a clear photo or scan of a signature on white paper.'; }
+};
+
+/* ---------- Pages: merge, reorder, delete, blank ---------- */
+let org=null;
+const OI={l:'<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',r:'<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',x:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',rot:'<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg>',dup:'<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>'};
+async function initOrg(){
+  if(!pdfDoc){ $('onote').textContent='The page viewer isn\u2019t ready yet. Try again in a moment.'; return; }
+  const o=org={src:[{name:state.name,doc:pdfDoc,bytes:state.bytes,tag:''}],pages:[],sel:-1,undo:[],q:Promise.resolve(),
+    io:new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ o.io.unobserve(en.target); const t=en.target; o.q=o.q.then(()=>thumb(o,t._e,t)); } }),{rootMargin:'400px'})};
+  $('onote').textContent='';
+  for(let n=1;n<=pdfDoc.numPages;n++){ if(org!==o) return; const vp=(await pdfDoc.getPage(n)).getViewport({scale:1}); o.pages.push({s:0,i:n-1,w:vp.width,h:vp.height}); }
+  drawGrid(); ordUpd();
+}
+async function thumb(o,e,box){
+  try{
+    const page=await o.src[e.s].doc.getPage(e.i+1), rt=(page.rotate+(e.rot||0))%360, v0=page.getViewport({scale:1,rotation:rt}), vp=page.getViewport({scale:130/v0.width*Math.min(window.devicePixelRatio||1,2),rotation:rt}), c=canvas(vp.width,vp.height);
+    c.style.cssText='width:100%;height:100%;display:block';
+    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; e.cv=c; box.appendChild(c);
+  }catch(err){}
+}
+function drawGrid(){
+  const g=$('oGrid'); g.innerHTML='';
+  org.pages.forEach((e,k)=>{
+    const c=document.createElement('div'); c.className='oc'+(org.sel===k?' sel':'');
+    c.innerHTML=`<div class="oth" style="aspect-ratio:${e.w}/${e.h}"></div><div class="on">${k+1}${e.blank?' \u00b7 blank':e.s>0?' \u00b7 '+org.src[e.s].tag:''}</div><div class="oct"><button data-a="l" aria-label="Move earlier">${OI.l}</button><button data-a="r" aria-label="Move later">${OI.r}</button><button data-a="rot" aria-label="Rotate page">${OI.rot}</button><button data-a="dup" aria-label="Duplicate page">${OI.dup}</button><button data-a="x" class="d" aria-label="Delete page">${OI.x}</button></div>`;
+    const th=c.firstChild; th._e=e;
+    if(e.cv) th.appendChild(e.cv); else if(!e.blank) org.io.observe(th);
+    g.appendChild(c);
+  });
+}
+function ordUpd(){
+  const n=org.pages.length;
+  $('oinfo').textContent=`${n} page${n===1?'':'s'}. Tap a page to select it. Arrows reorder, the other buttons rotate, duplicate or delete. Add PDFs appends pages at the end.`;
+  $('oMove').classList.toggle('hide',org.sel<0);
+  if(org.sel>=0){ $('oSelN').textContent=org.sel+1; $('oTo').value=org.sel+1; $('oTo').max=n; }
+  $('oUndo').disabled=!org.undo.length; $('oApply').disabled=$('oSave').disabled=!n;
+}
+const snap=()=>{ org.undo.push(org.pages.slice()); if(org.undo.length>40) org.undo.shift(); };
+$('oGrid').onclick=e=>{
+  if(!org) return; const c=e.target.closest('.oc'); if(!c) return;
+  const k=[...c.parentNode.children].indexOf(c), b=e.target.closest('button[data-a]');
+  if(b){
+    const a=b.dataset.a;
+    if(a==='x'){ snap(); org.pages.splice(k,1); org.sel=-1; }
+    else if(a==='rot'){ snap(); const e0=org.pages[k]; org.pages[k]={...e0,rot:((e0.rot||0)+90)%360,w:e0.h,h:e0.w,cv:null}; }
+    else if(a==='dup'){ snap(); org.pages.splice(k+1,0,{...org.pages[k],cv:null}); org.sel=k+1; }
+    else{ const j=k+(a==='l'?-1:1); if(j<0||j>=org.pages.length) return; snap(); [org.pages[k],org.pages[j]]=[org.pages[j],org.pages[k]]; if(org.sel===k) org.sel=j; else if(org.sel===j) org.sel=k; }
+  } else org.sel=org.sel===k?-1:k;
+  drawGrid(); ordUpd();
+};
+$('oGo').onclick=()=>{
+  if(!org||org.sel<0) return; const to=clamp(parseInt($('oTo').value)||1,1,org.pages.length)-1; if(to===org.sel) return;
+  snap(); const [e]=org.pages.splice(org.sel,1); org.pages.splice(to,0,e); org.sel=to; drawGrid(); ordUpd();
+};
+$('oBlank').onclick=()=>{
+  if(!org) return; snap(); const k=org.sel>=0?org.sel:org.pages.length-1, ref=org.pages[k]||{w:595,h:842};
+  org.pages.splice(k+1,0,{blank:1,s:0,i:-1,w:ref.w,h:ref.h}); org.sel=k+1; drawGrid(); ordUpd();
+};
+$('oUndo').onclick=()=>{ if(org&&org.undo.length){ org.pages=org.undo.pop(); org.sel=-1; drawGrid(); ordUpd(); } };
+$('oAdd').onclick=()=>$('oFile').click();
+$('oFile').onchange=async e=>{
+  const files=[...e.target.files]; e.target.value=''; if(!org||!files.length) return; const o=org; snap(); $('onote').textContent='Adding\u2026';
+  for(const f of files){
+    try{
+      if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf') throw new Error('not a PDF');
+      const bytes=new Uint8Array(await f.arrayBuffer());
+      if(String.fromCharCode(...bytes.slice(0,1024)).indexOf('%PDF')<0) throw new Error('not a PDF');
+      const doc=await pdfjsLib.getDocument({data:bytes.slice()}).promise, s=o.src.length;
+      o.src.push({name:f.name,doc,bytes,tag:f.name.replace(/\.pdf$/i,'').replace(/[<>&"]/g,'').slice(0,10)});
+      for(let n=1;n<=doc.numPages;n++){ const vp=(await doc.getPage(n)).getViewport({scale:1}); o.pages.push({s,i:n-1,w:vp.width,h:vp.height}); }
+      $('onote').textContent='';
+    }catch(err){ $('onote').textContent=`Skipped ${f.name}: ${err.message||err}`; }
+  }
+  if(org===o){ drawGrid(); ordUpd(); }
+};
+async function orgApply(){
+  const o=org; if(!o||!o.pages.length) return false;
+  try{
+    $('onote').textContent='Building\u2026'; await tick();
+    const base0=items.length?await buildEdited():state.bytes, docs=[await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false})];
+    for(let k=1;k<o.src.length;k++) docs.push(await PDFDocument.load(o.src[k].bytes,{updateMetadata:false}));
+    const out=await PDFDocument.create(), need=docs.map(()=>new Set()), map=docs.map(()=>new Map());
+    o.pages.forEach(e=>{ if(!e.blank) need[e.s].add(e.i); });
+    for(let k=0;k<docs.length;k++){ const idx=[...need[k]].sort((a,b)=>a-b); if(!idx.length) continue; const cps=await out.copyPages(docs[k],idx); idx.forEach((ix,j)=>map[k].set(ix,cps[j])); }
+    const used=new Set(), r0=new Map();
+    o.pages.forEach(e=>{
+      if(e.blank){ out.addPage([e.w,e.h]); return; }
+      const bp=map[e.s].get(e.i); if(!r0.has(bp)) r0.set(bp,bp.getRotation().angle);
+      let pg=bp; if(used.has(bp)){ const leaf=bp.node.clone(); pg=PDFLib.PDFPage.of(leaf,out.context.register(leaf),out); } else used.add(bp);
+      out.addPage(pg); pg.setRotation(PDFLib.degrees((r0.get(bp)+(e.rot||0))%360));
+    });
+    const bytes=await out.save();
+    await load(new File([bytes],state.name,{type:'application/pdf'}));
+    show('o'); return true;
+  }catch(err){ $('onote').textContent='Couldn\u2019t build the PDF: '+(err.message||err)+(/encrypt/i.test(err.message||'')?' (password-protected files can\u2019t be merged)':''); return false; }
+}
+$('oApply').onclick=async()=>{ if(await orgApply()) $('onote').textContent='Applied. The other tabs now use the new document.'; };
+$('oSave').onclick=async()=>{ if(await orgApply()) await saveBytes(state.bytes,`${base()}-organized.pdf`,$('onote')); };
+
+
+/* ---------- Elements: text engine ---------- */
+const bstr=(b,s,e)=>{ let r=''; for(let i=s;i<e;i++) r+=String.fromCharCode(b[i]); return r; };
+function parseContent(b){
+  const ops=[]; let i=0, args=[]; const n=b.length;
+  const ws=c=>c===32||c===10||c===13||c===9||c===12||c===0;
+  const dl=c=>ws(c)||c===40||c===41||c===60||c===62||c===91||c===93||c===123||c===125||c===47||c===37;
+  const skipStr=()=>{ let d=1; i++; while(i<n&&d>0){ const c=b[i]; if(c===92) i++; else if(c===40) d++; else if(c===41) d--; i++; } };
+  while(i<n){
+    const c=b[i];
+    if(ws(c)){ i++; continue; }
+    if(c===37){ while(i<n&&b[i]!==10&&b[i]!==13) i++; continue; }
+    const s=i; let tok;
+    if(c===40){ skipStr(); tok={t:'str',s,e:i}; }
+    else if(c===60&&b[i+1]===60){ let d=0; do{ if(b[i]===60&&b[i+1]===60){ d++; i+=2; } else if(b[i]===62&&b[i+1]===62){ d--; i+=2; } else if(b[i]===40) skipStr(); else i++; }while(i<n&&d>0); tok={t:'dict',s,e:i}; }
+    else if(c===60){ while(i<n&&b[i]!==62) i++; i++; tok={t:'str',s,e:i}; }
+    else if(c===91){ let d=0; do{ if(b[i]===91){ d++; i++; } else if(b[i]===93){ d--; i++; } else if(b[i]===40) skipStr(); else i++; }while(i<n&&d>0); tok={t:'arr',s,e:i}; }
+    else if(c===47){ i++; while(i<n&&!dl(b[i])) i++; tok={t:'name',s,e:i}; }
+    else{ while(i<n&&!dl(b[i])) i++; if(i===s) i++; const w=bstr(b,s,i); tok=/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w)?{t:'num',s,e:i,v:parseFloat(w)}:{t:'op',s,e:i,w}; }
+    if(tok.t!=='op'){ args.push(tok); continue; }
+    if(tok.w==='BI'){
+      while(i<n&&!(ws(b[i])&&b[i+1]===73&&b[i+2]===68&&(ws(b[i+3])||i+3>=n))) i++;
+      i+=4;
+      while(i<n&&!(ws(b[i])&&b[i+1]===69&&b[i+2]===73&&(i+3>=n||ws(b[i+3])||dl(b[i+3])))) i++;
+      i+=3; ops.push({op:'BI',args:[],s,e:i}); args=[]; continue;
+    }
+    ops.push({op:tok.w,args,s:args.length?args[0].s:s,e:i}); args=[];
+  }
+  return ops;
+}
+function surgery(b,ops,pairs,sel){
+  const reps=[];
+  for(const p of pairs){
+    if(!sel.has(p.hit)) continue; const o=ops[p.k], n=p.fs&&p.th?(-p.tx*1000/(p.fs*p.th)):0, tj=`[${n.toFixed(3)}] TJ`;
+    let r=tj; if(o.op==="'") r='T* '+tj; else if(o.op==='"') r=`${bstr(b,o.args[0].s,o.args[0].e)} Tw ${bstr(b,o.args[1].s,o.args[1].e)} Tc T* ${tj}`;
+    reps.push([o.s,o.e,r]);
+  }
+  if(!reps.length) return null;
+  let s=bstr(b,0,b.length); reps.sort((x,y)=>y[0]-x[0]);
+  for(const [a,e,r] of reps) s=s.slice(0,a)+r+s.slice(e);
+  const out=new Uint8Array(s.length); for(let i=0;i<s.length;i++) out[i]=s.charCodeAt(i); return out;
+}
+
+const mmul=(a,b)=>[a[0]*b[0]+a[1]*b[2],a[0]*b[1]+a[1]*b[3],a[2]*b[0]+a[3]*b[2],a[2]*b[1]+a[3]*b[3],a[4]*b[0]+a[5]*b[2]+b[4],a[4]*b[1]+a[5]*b[3]+b[5]];
+function strBytes(b,t){
+  const o=[];
+  if(b[t.s]===60){ let h=''; for(let i=t.s+1;i<t.e-1;i++){ const c=String.fromCharCode(b[i]); if(/[0-9a-fA-F]/.test(c)) h+=c; } if(h.length%2) h+='0'; for(let i=0;i<h.length;i+=2) o.push(parseInt(h.substr(i,2),16)); return o; }
+  for(let i=t.s+1;i<t.e-1;i++){
+    let c=b[i];
+    if(c===92){ c=b[++i]; if(c===110)o.push(10); else if(c===114)o.push(13); else if(c===116)o.push(9); else if(c===98)o.push(8); else if(c===102)o.push(12);
+      else if(c>=48&&c<=55){ let v=c-48, k=0; while(k<2&&b[i+1]>=48&&b[i+1]<=55){ v=v*8+b[++i]-48; k++; } o.push(v&255); }
+      else if(c===13){ if(b[i+1]===10) i++; } else if(c===10){} else o.push(c); }
+    else o.push(c);
+  }
+  return o;
+}
+function arrTokens(b,t){ const inner=b.slice(t.s+1,t.e-1), x=new Uint8Array(inner.length+2); x.set(inner); x[inner.length]=32; x[inner.length+1]=88; const o=parseContent(x); return o.length?o[0].args.map(a=>({...a,s:a.s,e:a.e})).map(a=>({...a,_b:x})):[]; }
+async function fontInfo(doc,fd,cache){
+  const key=fd.toString(); if(cache.has(key)) return cache.get(key);
+  let info=null;
+  try{
+    const sub=fd.lookup(N('Subtype'))?.toString();
+    if(sub==='/Type0'){
+      const enc=fd.lookup(N('Encoding'))?.toString(); const df=fd.lookupMaybe(N('DescendantFonts'),PDFArray)?.lookupMaybe(0,PDFDict);
+      if(df&&(enc==='/Identity-H'||enc==='/Identity-V')){
+        const dw=nv(df.lookup(N('DW')),1000), W=new Map(), wa=df.lookup(N('W'));
+        if(wa instanceof PDFArray){ let i=0; while(i<wa.size()){ const c=nv(wa.lookup(i)); const nx=wa.lookup(i+1); if(nx instanceof PDFArray){ for(let j=0;j<nx.size();j++) W.set(c+j,nv(nx.lookup(j))); i+=2; } else { const c2=nv(nx), w=nv(wa.lookup(i+2)); for(let c3=c;c3<=c2&&c3-c<70000;c3++) W.set(c3,w); i+=3; } } }
+        info={two:true,w:c=>W.has(c)?W.get(c):dw};
+      }
+    } else if(sub==='/Type1'||sub==='/TrueType'||sub==='/MMType1'){
+      const fc=nv(fd.lookup(N('FirstChar')),0), wa=fd.lookupMaybe(N('Widths'),PDFArray), desc=fd.lookupMaybe(N('FontDescriptor'),PDFDict), mw=desc?nv(desc.lookup(N('MissingWidth')),0):0;
+      if(wa){ const W=[]; for(let i=0;i<wa.size();i++) W.push(nv(wa.lookup(i))); info={two:false,w:c=>(c>=fc&&c-fc<W.length)?W[c-fc]:mw}; }
+      else {
+        const base=(fd.lookup(N('BaseFont'))?.toString()||'/Helvetica').replace(/^\/[A-Z]{6}\+/,'/').slice(1), b=/bold/i.test(base), it=/italic|oblique/i.test(base), SF=PDFLib.StandardFonts;
+        const nm=/courier/i.test(base)?(b&&it?SF.CourierBoldOblique:b?SF.CourierBold:it?SF.CourierOblique:SF.Courier):/times/i.test(base)?(b&&it?SF.TimesRomanBoldItalic:b?SF.TimesRomanBold:it?SF.TimesRomanItalic:SF.TimesRoman):(b&&it?SF.HelveticaBoldOblique:b?SF.HelveticaBold:it?SF.HelveticaOblique:SF.Helvetica);
+        const f=await doc.embedFont(nm); const cw=new Map();
+        info={two:false,w:c=>{ if(!cw.has(c)){ let w=500; try{ w=f.widthOfTextAtSize(String.fromCharCode(c),1000); }catch(e){} cw.set(c,w); } return cw.get(c); }};
+      }
+    }
+  }catch(e){ info=null; }
+  cache.set(key,info); return info;
+}
+async function computeRuns(doc,page,b,ops){
+  const res=page.node.Resources(), fonts=res&&res.lookupMaybe(N('Font'),PDFDict), cache=new Map(), runs=[];
+  let ctm=[1,0,0,1,0,0], tm=[1,0,0,1,0,0], tlm=[1,0,0,1,0,0], st=[], fs=0, th=1, tl=0, tc=0, tw=0, known=true, font=null, col=[0,0,0], fname=null, fdict=null, rise=0;
+  const td=(x,y)=>{ tlm=mmul([1,0,0,1,x,y],tlm); tm=tlm.slice(); known=true; };
+  for(let k=0;k<ops.length;k++){
+    const o=ops[k], a=o.args, v=i=>(a[i]&&a[i].v)||0;
+    switch(o.op){
+      case 'q': st.push([ctm.slice(),fs,th,tl,tc,tw,font,col,fname,fdict]); break;
+      case 'Q': if(st.length) [ctm,fs,th,tl,tc,tw,font,col,fname,fdict]=st.pop(); break;
+      case 'cm': ctm=mmul([v(0),v(1),v(2),v(3),v(4),v(5)],ctm); break;
+      case 'BT': tm=[1,0,0,1,0,0]; tlm=tm.slice(); known=true; break;
+      case 'Tf': { fs=v(1); const nm=a[0]&&bstr(b,a[0].s+1,a[0].e), fd=fonts&&nm?fonts.lookupMaybe(N(nm),PDFDict):null; font=fd?await fontInfo(doc,fd,cache):null; fname=nm; fdict=fd; break; }
+      case 'Tz': th=(a[0]?a[0].v:100)/100; break;
+      case 'TL': tl=v(0); break;
+      case 'Tc': tc=v(0); break;
+      case 'Tw': tw=v(0); break;
+      case 'Ts': rise=v(0); break;
+      case 'g': col=[v(0),v(0),v(0)]; break;
+      case 'rg': col=[v(0),v(1),v(2)]; break;
+      case 'k': col=[(1-v(0))*(1-v(3)),(1-v(1))*(1-v(3)),(1-v(2))*(1-v(3))]; break;
+      case 'Td': td(v(0),v(1)); break;
+      case 'TD': tl=-v(1); td(v(0),v(1)); break;
+      case 'Tm': tm=[v(0),v(1),v(2),v(3),v(4),v(5)]; tlm=tm.slice(); known=true; break;
+      case 'T*': td(0,-tl); break;
+      case 'Tj': case 'TJ': case "'": case '"': {
+        if(o.op==="'"||o.op==='"') td(0,-tl);
+        if(o.op==='"'){ tw=v(0); tc=v(1); }
+        if(!known||!font||!fs){ known=false; break; }
+        const last=a[a.length-1]; if(!last) break;
+        let sum=0, has=false; const codes=[];
+        const toks=last.t==='arr'?arrTokens(b,last):[last];
+        for(const t of toks){
+          if(t.t==='num'){ sum-=t.v/1000*fs; continue; }
+          if(t.t!=='str') continue;
+          const bb=strBytes(t._b||b,t), step=font.two?2:1;
+          for(let i=0;i+step<=bb.length;i+=step){ const c=step===2?(bb[i]<<8)|bb[i+1]:bb[i]; sum+=font.w(c)/1000*fs+tc+((!font.two&&c===32)?tw:0); has=true; codes.push(c); }
+        }
+        if(!has) break;
+        const tx=sum*th, M=mmul(tm,ctm), sx=Math.hypot(M[0],M[1])||1;
+        runs.push({k,op:o.op,s:[M[4],M[5]],u:[M[0]/sx,M[1]/sx],len:tx*sx,tx,fs,th,fsUser:Math.abs(fs)*Math.hypot(M[2],M[3]),color:col.slice(),fname,fd:fdict,M:M.slice(),fsRaw:fs,tc,tw,finfo:font,codes,rise});
+        tm=mmul([1,0,0,1,tx,0],tm);
+      }
+    }
+  }
+  return runs;
+}
+
+function pageBytes(pg){
+  const c=pg.node.Contents(), ss=c instanceof PDFArray?Array.from({length:c.size()},(_,i)=>c.lookup(i)):c?[c]:[];
+  const parts=ss.filter(x=>x instanceof PDFRawStream).map(x=>PDFLib.decodePDFRawStream(x).decode()); let len=0; parts.forEach(q=>len+=q.length+1);
+  const b=new Uint8Array(len); let o=0; parts.forEach(q=>{ b.set(q,o); o+=q.length; b[o++]=10; }); return b;
+}
+
+/* original-font text replacement */
+async function fontEnc(fd,used){
+  try{
+    const sub=fd.lookup(N('Subtype'))?.toString(), base=(fd.lookup(N('BaseFont'))?.toString()||'').slice(1), subset=/^[A-Z]{6}\+/.test(base), u2c=new Map();
+    const tu=fd.lookupMaybe(N('ToUnicode'),PDFRawStream);
+    if(tu){
+      const tb=PDFLib.decodePDFRawStream(tu).decode(), t=bstr(tb,0,tb.length);
+      const u=h=>{ h=h.padStart(Math.ceil(h.length/4)*4,'0'); return String.fromCharCode(...(h.match(/.{4}/g)||[]).map(x=>parseInt(x,16))); };
+      for(const blk of t.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) for(const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) u2c.set(parseInt(m[1],16),u(m[2]));
+      for(const blk of t.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) for(const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F]+>|\[[^\]]*\])/g)){
+        const lo=parseInt(m[1],16), hi=Math.min(parseInt(m[2],16),lo+70000);
+        if(m[3][0]==='<'){ const b0=u(m[3].slice(1,-1)); if(b0.length===1) for(let c=lo;c<=hi;c++) u2c.set(c,String.fromCharCode(b0.charCodeAt(0)+c-lo)); }
+        else { const arr=[...m[3].matchAll(/<([0-9a-fA-F]+)>/g)]; arr.forEach((a,i)=>u2c.set(lo+i,u(a[1]))); }
+      }
+    } else if(sub!=='/Type0'&&!subset){
+      const enc=fd.lookup(N('Encoding'));
+      if(enc instanceof PDFName&&enc.toString()==='/WinAnsiEncoding'){ const dd=new TextDecoder('windows-1252'); for(let c=32;c<256;c++){ const ch=dd.decode(Uint8Array.of(c)); if(ch!=='\ufffd'&&c!==127) u2c.set(c,ch); } }
+      else if(!enc&&/^(Helvetica|Times|Courier|Arial)/.test(base)) for(let c=32;c<127;c++) u2c.set(c,String.fromCharCode(c));
+    }
+    if(!u2c.size) return null;
+    const restrict=used&&(sub==='/Type0'||subset), inv=new Map(), best=new Map();
+    for(const [c,ch] of [...u2c.entries()].sort((a,b)=>a[0]-b[0])){
+      if(ch.length!==1) continue;
+      if(restrict){ const k=used.get(c)||0; if(k>(best.get(ch)||0)){ best.set(ch,k); inv.set(ch,c); } }
+      else if(!inv.has(ch)) inv.set(ch,c);
+    }
+    return {inv,two:sub==='/Type0'};
+  }catch(e){ return null; }
+}
+/* ---------- Elements: document operations ---------- */
+const nv=(x,d=0)=>x instanceof PDFNumber?x.asNumber():d;
+const dtxt=o=>{ try{ return o&&o.decodeText?o.decodeText():''; }catch(e){ return ''; } };
+const isRef=o=>o instanceof PDFLib.PDFRef;
+function walkTree(node,out,seen){
+  if(!node||seen.has(node)) return; seen.add(node);
+  const arr=node.lookupMaybe(N('Names'),PDFArray);
+  if(arr) for(let i=0;i+1<arr.size();i+=2) out.push({arr,i,name:dtxt(arr.lookup(i)),spec:arr.lookupMaybe(i+1,PDFDict)});
+  const kids=node.lookupMaybe(N('Kids'),PDFArray);
+  if(kids) for(let i=0;i<kids.size();i++) walkTree(kids.lookupMaybe(i,PDFDict),out,seen);
+}
+function isJsAction(a){ return a instanceof PDFDict&&a.lookup(N('S'))?.toString()==='/JavaScript'; }
+function scanDoc(doc){
+  const ctx=doc.context, pages=doc.getPages(), d={imgs:[],anns:[],atts:[],marks:[],markCount:0,js:0,info:{},xmp:false};
+  const use=new Map();
+  pages.forEach((pg,i)=>{ const xo=pg.node.Resources()?.lookupMaybe(N('XObject'),PDFDict); if(!xo) return; for(const [k,v] of xo.entries()) if(isRef(v)){ const key=v.toString(); if(!use.has(key)) use.set(key,new Set()); use.get(key).add(i+1); } });
+  for(const [ref,obj] of ctx.enumerateIndirectObjects()){
+    if(!(obj instanceof PDFRawStream)||obj.dict.lookup(N('Subtype'))?.toString()!=='/Image') continue;
+    d.imgs.push({num:ref.objectNumber,gen:ref.generationNumber,w:nv(obj.dict.lookup(N('Width'))),h:nv(obj.dict.lookup(N('Height'))),bytes:obj.contents.length,pages:[...(use.get(ref.toString())||[])].sort((a,b)=>a-b)});
+  }
+  d.imgs.sort((a,b)=>b.w*b.h-a.w*a.h);
+  pages.forEach((pg,i)=>{
+    const arr=pg.node.Annots(); if(!arr) return;
+    for(let j=0;j<arr.size();j++){
+      const ref=arr.get(j), a=arr.lookupMaybe(j,PDFDict); if(!a) continue;
+      const act=a.lookup(N('A')), aa=a.lookup(N('AA'));
+      if(isJsAction(act)) d.js++;
+      const ra=a.lookupMaybe(N('Rect'),PDFArray), rc=ra&&ra.size()>=4?[0,1,2,3].map(q=>nv(ra.lookup(q))):null, rect=rc?[Math.min(rc[0],rc[2]),Math.min(rc[1],rc[3]),Math.max(rc[0],rc[2]),Math.max(rc[1],rc[3])]:null;
+      d.anns.push({page:i+1,idx:j,rect,num:isRef(ref)?ref.objectNumber:-1,sub:(a.lookup(N('Subtype'))?.toString()||'/?').slice(1),text:dtxt(a.lookup(N('Contents'))),who:dtxt(a.lookup(N('T')))});
+    }
+  });
+  const cat=doc.catalog, names=cat.lookupMaybe(N('Names'),PDFDict);
+  const ef=names?.lookupMaybe(N('EmbeddedFiles'),PDFDict), list=[]; if(ef) walkTree(ef,list,new Set());
+  list.forEach((e,n)=>{ const f=e.spec; const st=f?.lookupMaybe(N('EF'),PDFDict)?.lookupMaybe(N('F'),PDFRawStream); d.atts.push({n,name:dtxt(f?.lookup(N('UF')))||dtxt(f?.lookup(N('F')))||e.name||'file',size:st?st.contents.length:0}); });
+  if(names?.has(N('JavaScript'))) d.js++;
+  if(isJsAction(cat.lookup(N('OpenAction')))) d.js++;
+  if(cat.has(N('AA'))) d.js++;
+  const ol=cat.lookupMaybe(N('Outlines'),PDFDict);
+  if(ol){ d.markCount=nv(ol.lookup(N('Count'))); let it=ol.lookupMaybe(N('First'),PDFDict), c=0; while(it&&c<80){ d.marks.push(dtxt(it.lookup(N('Title')))); it=it.lookupMaybe(N('Next'),PDFDict); c++; } }
+  const info=ctx.lookupMaybe(ctx.trailerInfo.Info,PDFDict);
+  for(const k of ['Title','Author','Subject','Keywords','Creator','Producer','CreationDate','ModDate']) d.info[k]=info?dtxt(info.lookup(N(k))):'';
+  d.xmp=cat.has(N('Metadata'));
+  return d;
+}
+function opDelImage(doc,num){
+  const ref=PDFLib.PDFRef.of(num,0), ctx=doc.context;
+  ctx.assign(ref,PDFRawStream.of(ctx.obj({Type:'XObject',Subtype:'Image',Width:1,Height:1,ImageMask:true,BitsPerComponent:1}),new Uint8Array([0x80])));
+}
+function opDelAnnots(doc,match){
+  let n=0;
+  doc.getPages().forEach((pg,i)=>{
+    const arr=pg.node.Annots(); if(!arr) return;
+    for(let j=arr.size()-1;j>=0;j--){
+      const a=arr.lookupMaybe(j,PDFDict); if(!a) continue;
+      const rec={page:i+1,idx:j,sub:(a.lookup(N('Subtype'))?.toString()||'/?').slice(1),num:isRef(arr.get(j))?arr.get(j).objectNumber:-1};
+      if(match(rec)){ const ref=arr.get(j); arr.remove(j); n++;
+        const af=doc.catalog.lookupMaybe(N('AcroForm'),PDFDict)?.lookupMaybe(N('Fields'),PDFArray);
+        if(af&&isRef(ref)) for(let q=af.size()-1;q>=0;q--) if(af.get(q)===ref||String(af.get(q))===String(ref)) af.remove(q);
+      }
+    }
+  });
+  return n;
+}
+function opDelAttachment(doc,n){
+  const names=doc.catalog.lookupMaybe(N('Names'),PDFDict), ef=names?.lookupMaybe(N('EmbeddedFiles'),PDFDict), list=[]; if(ef) walkTree(ef,list,new Set());
+  const e=list[n]; if(e){ e.arr.remove(e.i+1); e.arr.remove(e.i); }
+}
+function opDelAllAttachments(doc){ doc.catalog.lookupMaybe(N('Names'),PDFDict)?.delete(N('EmbeddedFiles')); }
+function opDelBookmarks(doc){ doc.catalog.delete(N('Outlines')); }
+function opStripJs(doc){
+  const cat=doc.catalog; cat.lookupMaybe(N('Names'),PDFDict)?.delete(N('JavaScript'));
+  if(isJsAction(cat.lookup(N('OpenAction')))) cat.delete(N('OpenAction'));
+  cat.delete(N('AA'));
+  doc.getPages().forEach(pg=>{ const arr=pg.node.Annots(); if(arr) for(let j=0;j<arr.size();j++){ const a=arr.lookupMaybe(j,PDFDict); if(!a) continue; if(isJsAction(a.lookup(N('A')))) a.delete(N('A')); a.delete(N('AA')); } pg.node.delete(N('AA')); });
+}
+function opSetInfo(doc,vals,dropXmp){
+  const ctx=doc.context; let info=ctx.lookupMaybe(ctx.trailerInfo.Info,PDFDict);
+  if(!info){ info=ctx.obj({}); ctx.trailerInfo.Info=ctx.register(info); }
+  for(const [k,v] of Object.entries(vals)){ if(v===''||v==null) info.delete(N(k)); else info.set(N(k),/Date$/.test(k)?PDFLib.PDFString.of(v):PDFLib.PDFHexString.fromText(v)); }
+  if(dropXmp) doc.catalog.delete(N('Metadata'));
+}
+
+/* ---------- Elements: UI ---------- */
+let EL=null, elPrev=null, elKeep=null;
+new MutationObserver(()=>{ clearTimeout(window.__nt); if($('elnote').textContent) window.__nt=setTimeout(()=>{ $('elnote').textContent=''; },6000); }).observe($('elnote'),{childList:true,characterData:true,subtree:true});
+const T={n:1,sel:new Set(),runs:[]};
+function elInit(){
+  if(!EL){ EL={sec:elKeep||'img',page:elKeepPage||1,q:Promise.resolve()}; elKeep=null; elKeepPage=0; EL.p=getXDoc().then(scanDoc); }
+  elHistBtns(); elSec(EL.sec);
+}
+let elKeepPage=0, elMsg='';
+function elSec(k){
+  EL.sec=k; ['img','ann','att','bm','inf','txt','fnt','cap'].forEach(a=>$('e-'+a).classList.toggle('hide',a!==k));
+  $('elType').value=k;
+  const paged=['img','ann','txt','cap'].includes(k); $('elPg').classList.toggle('hide',!paged); $('tPanel').classList.toggle('hide',k!=='txt'); $('cPanel').classList.toggle('hide',k!=='cap');
+  elRender();
+}
+function elRender(){
+  const k=EL.sec, tot=pdfDoc?pdfDoc.numPages:1; EL.page=Math.min(Math.max(1,EL.page),tot); $('eLbl').textContent=`${EL.page}/${tot}`;
+  const host=$('e-'+k), sc=document.scrollingElement||document.documentElement, y=sc.scrollTop; host.style.minHeight=host.offsetHeight+'px';
+  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="warn">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
+}
+$('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
+$('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
+$('elType').onchange=()=>{ if(EL) elSec($('elType').value); };
+const elH={u:[],r:[]};
+function elHistBtns(){ $('elUndo').disabled=!elH.u.length; $('elRedo').disabled=!elH.r.length; $('elUc').textContent=elH.u.length||''; $('elRc').textContent=elH.r.length||''; }
+async function elGoto(bytes){ if(EL){ elKeep=EL.sec; elKeepPage=EL.page; } await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); }
+async function elApply(fn){
+  if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
+  $('elnote').textContent='Applying\u2026'; await tick();
+  try{
+    const base0=items.length?await buildEdited():state.bytes, prev=state.bytes;
+    const doc=await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false});
+    await fn(doc); const bytes=await doc.save();
+    elH.u.push(prev); if(elH.u.length>10) elH.u.shift(); elH.r.length=0;
+    await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
+  }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); return false; }
+}
+$('elUndo').onclick=async()=>{ if(!elH.u.length) return; elH.r.push(state.bytes); if(elH.r.length>10) elH.r.shift(); await elGoto(elH.u.pop()); $('elnote').textContent='Undone.'; };
+$('elRedo').onclick=async()=>{ if(!elH.r.length) return; elH.u.push(state.bytes); if(elH.u.length>10) elH.u.shift(); await elGoto(elH.r.pop()); $('elnote').textContent='Redone.'; };
+const esc=t=>String(t).replace(/[<>&"]/g,'');
+const rowHtml=(th,info,btns)=>`<div class="xth">${th}</div><div class="xinfo">${info}</div><div class="eb">${btns}</div>`;
+
+/* page render with highlights */
+async function elStage(host,n){
+  const page=await pdfDoc.getPage(n), v0=page.getViewport({scale:1}), W=Math.min(host.clientWidth,800)||300, s=W/v0.width, dpr=Math.min(window.devicePixelRatio||1,2), vp=page.getViewport({scale:s});
+  const st=document.createElement('div'); st.className='elstage'; st.style.width=W+'px'; st.style.height=vp.height+'px';
+  const c=canvas(Math.round(vp.width*dpr),Math.round(vp.height*dpr)); c.style.cssText='width:100%;height:100%;display:block'; st.appendChild(c); host.appendChild(st);
+  await page.render({canvasContext:c.getContext('2d'),viewport:page.getViewport({scale:s*dpr})}).promise;
+  const rectEl=(r,cls)=>{ const a=vp.convertToViewportPoint(r[0],r[1]), b=vp.convertToViewportPoint(r[2],r[3]), d=document.createElement('div'); d.className=cls; Object.assign(d.style,{left:Math.min(a[0],b[0])+'px',top:Math.min(a[1],b[1])+'px',width:Math.max(4,Math.abs(a[0]-b[0]))+'px',height:Math.max(4,Math.abs(a[1]-b[1]))+'px'}); st.appendChild(d); return d; };
+  return {st,rectEl};
+}
+function elSelect(stage,state2,idx,rows,boxes){
+  rows.forEach((r,i)=>r&&r.classList.toggle('sel',i===idx));
+  if(state2.hl){ state2.hl.remove(); state2.hl=null; }
+  if(boxes[idx]) state2.hl=stage.rectEl(boxes[idx],'hl');
+  const r=stage.st.getBoundingClientRect(); if(boxes[idx]&&(r.top<90||r.bottom>window.innerHeight)) stage.st.scrollIntoView({behavior:'smooth',block:'center'});
+}
+/* image saving */
+async function decodedCanvas(n,im){
+  try{ const r=await pageImages(n); const k=r.imgs.findIndex(x=>x.width===im.w&&x.height===im.h); const c=k>=0?imgCanvas(r.imgs[k]):null; r.page.cleanup(); return c; }catch(e){ return null; }
+}
+async function imgSave(im,n,i){
+  try{
+    const doc=await getXDoc(), r=await extractImg(doc.context.lookup(PDFLib.PDFRef.of(im.num,im.gen))).catch(()=>null), nm=`${base()}-p${n}-image${i+1}`;
+    if(r&&r.ext!=='jp2'){ await saveBytes(r.data,`${nm}.${r.ext}`,$('elnote')); return; }
+    const cv=await decodedCanvas(n,im);
+    if(cv){ const blob=await new Promise(f=>cv.toBlob(f,'image/png')); await saveBytes(new Uint8Array(await blob.arrayBuffer()),`${nm}.png`,$('elnote')); return; }
+    if(r){ await saveBytes(r.data,`${nm}.${r.ext}`,$('elnote')); return; }
+    $('elnote').textContent='This image format can\u2019t be saved here.';
+  }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); }
+}
+async function imgSaveAll(d){
+  try{
+    const doc=await getXDoc(), z=new JSZip(); let k=0;
+    for(const [i,im] of d.imgs.entries()){
+      $('elnote').textContent=`Extracting ${i+1} of ${d.imgs.length}\u2026`; await tick();
+      const r=await extractImg(doc.context.lookup(PDFLib.PDFRef.of(im.num,im.gen))).catch(()=>null), nm=`image${i+1}${im.pages.length?'-p'+im.pages[0]:''}`;
+      if(r&&r.ext!=='jp2'){ z.file(`${nm}.${r.ext}`,r.data); k++; continue; }
+      const cv=im.pages.length?await decodedCanvas(im.pages[0],im):null;
+      if(cv){ const blob=await new Promise(f=>cv.toBlob(f,'image/png')); z.file(`${nm}.png`,new Uint8Array(await blob.arrayBuffer())); k++; }
+      else if(r){ z.file(`${nm}.${r.ext}`,r.data); k++; }
+    }
+    if(!k){ $('elnote').textContent='No images could be extracted.'; return; }
+    $('elnote').textContent='Building ZIP\u2026'; await saveBytes(await z.generateAsync({type:'uint8array'}),`${base()}-images.zip`,$('elnote'));
+  }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); }
+}
+/* images */
+async function elImgs(){
+  const n=EL.page, box=$('e-img'), d=await EL.p, doc=await getXDoc(), list=d.imgs.filter(i=>i.pages.includes(n)), other=d.imgs.filter(i=>!i.pages.length).length;
+  box.innerHTML=`<p class="note" style="margin:0 0 6px">${list.length} image${list.length===1?'':'s'} on this page${other?` \u00b7 ${other} in the file aren\u2019t used directly on a page`:''}. Tap an image row (or its dashed box on the page) to highlight it. Delete leaves the space empty. Replace stretches your image to the original proportions. Save keeps the original file, or a PNG for formats browsers can\u2019t open.</p><div class="tools" style="margin-bottom:8px"><button class="t g" id="imgAll">Save all images in the document (ZIP)</button></div>`;
+  $('imgAll').onclick=()=>imgSaveAll(d);
+  const host=document.createElement('div'); box.appendChild(host);
+  let dec=[], pg=null; try{ const r=await pageImages(n); dec=r.imgs.map((im,i)=>({im,box:r.boxes[i],used:false})); pg=r.page; }catch(e){}
+  if(EL.page!==n||EL.sec!=='img') return;
+  const stage=await elStage(host,n); if(EL.page!==n||EL.sec!=='img') return;
+  const rows=[], boxes=[], S={};
+  for(const [i,im] of list.entries()){
+    const row=document.createElement('div'); row.className='xrow'; rows.push(row);
+    row.innerHTML=rowHtml('\u2026',`<b>Image ${i+1}</b><br>${im.w}\u00d7${im.h} px \u00b7 ${fmt(im.bytes)}`,'<button data-a="save">Save</button><button data-a="rep">Replace</button><button data-a="gray">Gray</button><button data-a="del" class="d">Delete</button>');
+    const th=row.firstChild, m=dec.find(x=>!x.used&&x.im.width===im.w&&x.im.height===im.h);
+    boxes.push(m?m.box:null);
+    try{
+      if(m){ m.used=true; const sc=Math.min(1,128/Math.max(m.im.width,m.im.height)), t=canvas(Math.max(1,Math.round(m.im.width*sc)),Math.max(1,Math.round(m.im.height*sc))), tx=t.getContext('2d'); tx.imageSmoothingQuality='high'; tx.drawImage(imgCanvas(m.im),0,0,t.width,t.height); const g=new Image(); g.src=t.toDataURL('image/png'); th.textContent=''; th.appendChild(g); }
+      else { const r=await extractImg(doc.context.lookup(PDFLib.PDFRef.of(im.num,im.gen))); if(r&&r.ext!=='jp2'){ const g=new Image(); g.src=URL.createObjectURL(new Blob([r.data],{type:mime('x.'+r.ext)})); th.textContent=''; th.appendChild(g); } else th.textContent='n/a'; }
+    }catch(e){ th.textContent='n/a'; }
+    row.onclick=e=>{ if(!e.target.closest('button')) elSelect(stage,S,i,rows,boxes); };
+    row.querySelector('.eb').onclick=e=>{
+      const b=e.target.closest('button'); if(!b) return;
+      if(b.dataset.a==='del') elApply(d2=>opDelImage(d2,im.num));
+      else if(b.dataset.a==='rep'){ EL.target=im; $('eImgFile').click(); }
+      else if(b.dataset.a==='save') imgSave(im,n,i);
+      else elApply(async d2=>{
+        const obj=d2.context.lookup(PDFLib.PDFRef.of(im.num,im.gen)); let c=null;
+        const r=await extractImg(obj).catch(()=>null);
+        if(r&&r.ext!=='jp2'){ const bm=await createImageBitmap(new Blob([r.data],{type:mime('x.'+r.ext)})); c=canvas(bm.width,bm.height); c.getContext('2d').drawImage(bm,0,0); }
+        else c=await decodedCanvas(n,im);
+        if(!c) throw new Error('This image format can\u2019t be converted here.');
+        const w=c.width,h=c.height,o=canvas(w,h),x=o.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(c,0,0);
+        const id=x.getImageData(0,0,w,h), q=id.data; for(let k=0;k<q.length;k+=4){ const g=.299*q[k]+.587*q[k+1]+.114*q[k+2]; q[k]=q[k+1]=q[k+2]=g; } x.putImageData(id,0,0);
+        const blob=await new Promise(f=>o.toBlob(f,'image/jpeg',.88)), dd=d2.context.obj({Type:'XObject',Subtype:'Image',Width:w,Height:h,ColorSpace:'DeviceRGB',BitsPerComponent:8,Filter:'DCTDecode'}), sm=obj.dict.get(N('SMask'));
+        if(sm) dd.set(N('SMask'),sm); d2.context.assign(PDFLib.PDFRef.of(im.num,im.gen),PDFRawStream.of(dd,new Uint8Array(await blob.arrayBuffer())));
+      });
+    };
+    box.appendChild(row);
+  }
+  boxes.forEach((b,i)=>{ if(!b) return; const el=stage.rectEl(b,'ob'); el.onclick=()=>{ elSelect(stage,S,i,rows,boxes); rows[i].scrollIntoView({behavior:'smooth',block:'center'}); }; });
+  if(boxes.some(b=>!b)) box.insertAdjacentHTML('beforeend','<p class="note">Some images have no known position on the page, so they can\u2019t be highlighted.</p>');
+  if(pg) pg.cleanup();
+}
+$('eImgFile').onchange=e=>{
+  const f=e.target.files[0], im=EL&&EL.target; e.target.value=''; if(!f||!im) return;
+  elApply(async d2=>{
+    const bm=await createImageBitmap(f), long=Math.min(2000,Math.max(im.w,im.h,800)), asp=im.w/im.h, w=Math.round(asp>=1?long:long*asp), h=Math.round(asp>=1?long/asp:long);
+    const c=canvas(w,h), x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.imageSmoothingQuality='high';
+    const k=Math.min(w/bm.width,h/bm.height), dw=bm.width*k, dh=bm.height*k; x.drawImage(bm,(w-dw)/2,(h-dh)/2,dw,dh);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9)), dd=d2.context.obj({Type:'XObject',Subtype:'Image',Width:w,Height:h,ColorSpace:'DeviceRGB',BitsPerComponent:8,Filter:'DCTDecode'});
+    d2.context.assign(PDFLib.PDFRef.of(im.num,im.gen),PDFRawStream.of(dd,new Uint8Array(await blob.arrayBuffer())));
+  });
+};
+
+/* annotations */
+async function elAnns(){
+  const n=EL.page, box=$('e-ann'), d=await EL.p, list=d.anns.filter(a=>a.page===n);
+  box.innerHTML='';
+  if(!list.length){ box.innerHTML=`<p class="muted">No annotations on this page.${d.anns.length?` ${d.anns.length} elsewhere in the document.`:''}</p>`; return; }
+  box.insertAdjacentHTML('beforeend','<p class="note" style="margin:0 0 6px">Tap an annotation row (or its dashed box on the page) to highlight it.</p>');
+  const host=document.createElement('div'); box.appendChild(host);
+  const stage=await elStage(host,n); if(EL.page!==n||EL.sec!=='ann') return;
+  const rows=[], boxes=[], S={}, order=[];
+  const by={}; list.forEach(a=>(by[a.sub]=by[a.sub]||[]).push(a));
+  Object.entries(by).forEach(([sub,items])=>{
+    const g=document.createElement('div'); g.className='egrp'; g.innerHTML=`<b>${esc(sub)}</b> \u00b7 ${items.length}`;
+    const tl=document.createElement('div'); tl.className='tools'; tl.style.margin='8px 0';
+    const b1=document.createElement('button'); b1.className='t g'; b1.textContent='Delete all on this page'; b1.onclick=()=>elApply(d2=>opDelAnnots(d2,r=>r.page===n&&r.sub===sub));
+    const total=d.anns.filter(a=>a.sub===sub).length, b2=document.createElement('button'); b2.className='t g'; b2.textContent=`Delete all in document (${total})`; b2.onclick=()=>elApply(d2=>opDelAnnots(d2,r=>r.sub===sub));
+    tl.append(b1,b2); g.appendChild(tl);
+    items.slice(0,100).forEach(a=>{
+      const i=rows.length, row=document.createElement('div'); row.className='xrow';
+      row.innerHTML=`<div class="xinfo">${a.text?esc(a.text.slice(0,100)):'(no text)'}${a.who?' \u00b7 '+esc(a.who):''}</div><div class="eb"><button class="d">Delete</button></div>`;
+      rows.push(row); boxes.push(a.rect&&(a.rect[2]-a.rect[0]>0.5||a.rect[3]-a.rect[1]>0.5)?a.rect:null);
+      row.onclick=e=>{ if(!e.target.closest('button')) elSelect(stage,S,i,rows,boxes); };
+      row.querySelector('button').onclick=()=>elApply(d2=>opDelAnnots(d2,r=>r.page===a.page&&r.idx===a.idx)); g.appendChild(row);
+    });
+    if(items.length>100) g.insertAdjacentHTML('beforeend','<p class="note">Showing the first 100.</p>');
+    box.appendChild(g);
+  });
+  boxes.forEach((b,i)=>{ if(!b) return; const el=stage.rectEl(b,'ob'); el.onclick=()=>{ elSelect(stage,S,i,rows,boxes); rows[i].scrollIntoView({behavior:'smooth',block:'center'}); }; });
+}
+
+/* attachments */
+async function attSave(a){
+  try{
+    const doc=await getXDoc(), names=doc.catalog.lookupMaybe(N('Names'),PDFDict), ef=names?.lookupMaybe(N('EmbeddedFiles'),PDFDict), list=[]; if(ef) walkTree(ef,list,new Set());
+    const st=list[a.n]?.spec?.lookupMaybe(N('EF'),PDFDict)?.lookupMaybe(N('F'),PDFRawStream);
+    if(!st){ $('elnote').textContent='Couldn\u2019t read this attachment.'; return; }
+    await saveBytes(PDFLib.decodePDFRawStream(st).decode(),a.name||'attachment',$('elnote'));
+  }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); }
+}
+async function elAtts(){
+  const box=$('e-att'), d=await EL.p;
+  if(!d.atts.length){ box.innerHTML='<p class="muted">No embedded file attachments found. File-attachment annotations appear under Annotations.</p>'; return; }
+  box.innerHTML='';
+  d.atts.forEach(a=>{ const row=document.createElement('div'); row.className='xrow'; row.innerHTML=`<div class="xinfo"><b>${esc(a.name)}</b><br>${fmt(a.size)}</div><div class="eb"><button data-a="save">Save</button><button data-a="del" class="d">Delete</button></div>`; row.querySelector('.eb').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.a==='save') attSave(a); else elApply(d2=>opDelAttachment(d2,a.n)); }; box.appendChild(row); });
+  const all=document.createElement('button'); all.className='t g'; all.style.marginTop='10px'; all.textContent='Remove all attachments'; all.onclick=()=>elApply(d2=>opDelAllAttachments(d2)); box.appendChild(all);
+}
+
+/* bookmarks */
+async function elMarks(){
+  const box=$('e-bm'), d=await EL.p;
+  if(!d.marks.length){ box.innerHTML='<p class="muted">No bookmarks found.</p>'; return; }
+  box.innerHTML=`<p class="note" style="margin:0 0 6px">${Math.abs(d.markCount)||d.marks.length} bookmark${(Math.abs(d.markCount)||d.marks.length)>1?'s':''}. Top level:</p><div class="xinfo" style="margin-bottom:10px">${d.marks.map(m=>'\u2022 '+esc(m||'(untitled)')).join('<br>')}</div>`;
+  const b=document.createElement('button'); b.className='t g'; b.textContent='Remove all bookmarks'; b.onclick=()=>elApply(d2=>opDelBookmarks(d2)); box.appendChild(b);
+}
+
+/* info + javascript */
+async function elInfo(){
+  const box=$('e-inf'), d=await EL.p, keys=['Title','Author','Subject','Keywords','Creator','Producer','CreationDate','ModDate'];
+  box.innerHTML=keys.map(k=>`<label class="muted" style="display:block;margin-bottom:8px">${k}<input class="xin" data-k="${k}" style="margin:4px 0 0"></label>`).join('')+
+    `<label class="muted" style="display:block;margin-bottom:10px"><input type="checkbox" id="infX" ${d.xmp?'checked':''}> Also remove XMP metadata${d.xmp?'':' (none present)'}</label>
+     <div class="tools"><button class="t" id="infSave">Save changes</button><button class="t g" id="infWipe">Strip all metadata</button></div>
+     <p class="muted" style="margin:14px 0 6px">JavaScript: ${d.js?d.js+' place'+(d.js>1?'s':'')+' found':'none found'}</p><button class="t g" id="jsDel" ${d.js?'':'disabled'}>Remove all JavaScript</button>`;
+  box.querySelectorAll('[data-k]').forEach(i=>i.value=d.info[i.dataset.k]||'');
+  $('infSave').onclick=()=>{ const v={}; box.querySelectorAll('[data-k]').forEach(i=>v[i.dataset.k]=i.value.trim()); elApply(d2=>opSetInfo(d2,v,$('infX').checked)); };
+  $('infWipe').onclick=()=>{ const v={}; keys.forEach(k=>v[k]=''); elApply(d2=>opSetInfo(d2,v,true)); };
+  $('jsDel').onclick=()=>elApply(d2=>opStripJs(d2));
+}
+
+/* text */
+function runLabel(r,its){
+  const out=[];
+  for(const t of its){
+    if(!t.str||!t.width) continue;
+    const h=Math.hypot(t.transform[0],t.transform[1])||1, ux=t.transform[0]/h, uy=t.transform[1]/h, d=[t.transform[4]-r.s[0],t.transform[5]-r.s[1]];
+    const ts=d[0]*r.u[0]+d[1]*r.u[1], pp=Math.abs(-d[0]*r.u[1]+d[1]*r.u[0]), te=ts+t.width*(ux*r.u[0]+uy*r.u[1]);
+    if(pp>=Math.max(2,.4*r.fsUser)) continue;
+    const o0=Math.max(0,Math.min(ts,te)), o1=Math.min(r.len,Math.max(ts,te)); if(o1-o0<.3) continue;
+    const n=t.str.length, lo=Math.min(ts,te), a=Math.round((o0-lo)/t.width*n), e=Math.round((o1-lo)/t.width*n);
+    out.push(t.str.slice(a,e));
+  }
+  return out.join('');
+}
+async function tPage(){
+  const n=EL.page; T.n=n; T.sel=new Set(); tList(); $('tNote').textContent='';
+  if(!pdfDoc){ $('tNote').textContent='The page viewer isn\u2019t ready yet.'; return; }
+  const page=await pdfDoc.getPage(n), v0=page.getViewport({scale:1}), W=Math.min($('e-txt').clientWidth,800)||300, s=W/v0.width, dpr=Math.min(window.devicePixelRatio||1,2), vp=page.getViewport({scale:s}), st=$('tStage');
+  st.innerHTML=''; st.style.width=W+'px'; st.style.height=vp.height+'px';
+  const c=canvas(Math.round(vp.width*dpr),Math.round(vp.height*dpr)); c.style.cssText='width:100%;height:100%;display:block'; st.appendChild(c);
+  await page.render({canvasContext:c.getContext('2d'),viewport:page.getViewport({scale:s*dpr})}).promise;
+  if(EL.page!==n||EL.sec!=='txt') return;
+  const xd=await getXDoc(), pg=xd.getPage(n-1), b=pageBytes(pg), ops=parseContent(b), runs=await computeRuns(xd,pg,b,ops), its=(await page.getTextContent()).items.filter(i=>'str' in i);
+  runs.forEach((r,i)=>{ r.idx=i; r.label=runLabel(r,its); });
+  const gs=[];
+  for(const r of runs){
+    const g=gs[gs.length-1];
+    if(g){ const d=[r.s[0]-g.s[0],r.s[1]-g.s[1]], gap=d[0]*g.u[0]+d[1]*g.u[1]-g.len, pp=Math.abs(-d[0]*g.u[1]+d[1]*g.u[0]);
+      if(r.fname===g.fname&&Math.abs(r.fsUser/g.fsUser-1)<.03&&r.color.every((c,q)=>Math.abs(c-g.color[q])<.05)&&r.u[0]*g.u[0]+r.u[1]*g.u[1]>.999&&pp<.25*g.fsUser&&gap>=-.5*g.fsUser&&gap<=.35*g.fsUser){ g.ids.push(r.idx); g.label+=r.label; g.len=d[0]*g.u[0]+d[1]*g.u[1]+r.len; continue; } }
+    gs.push({ids:[r.idx],s:r.s,u:r.u,len:r.len,fsUser:r.fsUser,color:r.color,label:r.label,fname:r.fname});
+  }
+  gs.forEach((g,i)=>{ g.id=i; g.label=g.label.trim(); });
+  T.runs=gs.filter(g=>g.len>.5&&g.label);
+  if(!T.runs.length) $('tNote').textContent='No editable text found on this page. Text in scanned images, unusual fonts or form objects can\u2019t be edited here.';
+  T.runs.forEach(r=>{
+    const v=[-r.u[1],r.u[0]], f=r.fsUser, P=(a,b2)=>vp.convertToViewportPoint(r.s[0]+r.u[0]*a+v[0]*b2,r.s[1]+r.u[1]*a+v[1]*b2), pts=[P(0,-.22*f),P(r.len,-.22*f),P(r.len,.85*f),P(0,.85*f)];
+    const x0=Math.min(...pts.map(q=>q[0])), x1=Math.max(...pts.map(q=>q[0])), y0=Math.min(...pts.map(q=>q[1])), y1=Math.max(...pts.map(q=>q[1]));
+    const d=document.createElement('div'); d.className='rbox'; Object.assign(d.style,{left:x0+'px',top:y0+'px',width:(x1-x0)+'px',height:(y1-y0)+'px'});
+    d.onclick=()=>{ if(T.sel.has(r.id)){ T.sel.delete(r.id); d.classList.remove('sel'); } else { T.sel.add(r.id); d.classList.add('sel'); } tList(); };
+    st.appendChild(d);
+  });
+}
+function tList(){
+  const L=$('tList'); L.innerHTML='';
+  for(const id of T.sel){ const r=T.runs.find(x=>x.id===id); if(!r) continue; const i=document.createElement('input'); i.className='xin'; i.dataset.id=id; i.value=r.label; i.style.marginBottom='6px'; L.appendChild(i); }
+  $('tApply').disabled=$('tDel').disabled=!T.sel.size; $('tOpts').classList.toggle('hide',!T.sel.size);
+}
+async function tApply(del){
+  const jobs=[...T.sel].map(id=>{ const r=T.runs.find(x=>x.id===id), inp=document.querySelector(`#tList input[data-id="${id}"]`); return {id,label:r.label,ids:r.ids,g:r,text:del?'':(inp?inp.value:r.label)}; }).filter(j=>del||j.text!==j.label);
+  if(!jobs.length){ $('tNote').textContent='Nothing to change. Edit the text first.'; return; }
+  const n=T.n, fam=$('tFont').value, fit=$('tFit').checked;
+  await elApply(async doc=>{
+    const pg=doc.getPage(n-1), b=pageBytes(pg), ops=parseContent(b), runs=await computeRuns(doc,pg,b,ops);
+    const nb=surgery(b,ops,runs.map((r,i)=>({...r,hit:i})),new Set(jobs.flatMap(j=>j.ids)));
+    if(nb) pg.node.set(N('Contents'),doc.context.register(doc.context.flateStream(nb)));
+    const f=await doc.embedFont(PDFLib.StandardFonts[fam]), clean=t=>Array.from(t).map(c=>{ try{ f.encodeText(c); return c; }catch(e){ return '?'; } }).join('');
+    let orig=0, std=0; const usedBy=new Map();
+    runs.forEach(r=>{ if(!r.codes||!r.fname) return; let m=usedBy.get(r.fname); if(!m) usedBy.set(r.fname,m=new Map()); r.codes.forEach(c=>m.set(c,(m.get(c)||0)+1)); });
+    for(const j of jobs){
+      if(!j.text) continue; const r0=runs[j.ids[0]]; if(!r0) continue;
+      const col=r0.color.map(c=>Math.min(1,Math.max(0,c))), txO=j.g.len/(Math.hypot(r0.M[0],r0.M[1])||1);
+      const enc=r0.fd&&r0.fname?await fontEnc(r0.fd,usedBy.get(r0.fname)):null;
+      if(enc&&[...j.text].every(ch=>enc.inv.has(ch))){
+        const codes=[...j.text].map(ch=>enc.inv.get(ch)), hex=codes.map(c=>c.toString(16).padStart(enc.two?4:2,'0')).join(''), fi=r0.finfo;
+        let tc=r0.tc;
+        if(fit&&fi&&codes.length>1){ const nat=codes.reduce((a,c)=>a+(fi.w(c)/1000*r0.fsRaw+r0.tc+((!enc.two&&c===32)?r0.tw:0)),0)*r0.th; if(Math.abs(txO-nat)<=.3*txO) tc=r0.tc+(txO-nat)/(r0.th*codes.length); }
+        pg.pushOperators(PDFLib.pushGraphicsState(),PDFLib.beginText(),PDFLib.setFillingRgbColor(col[0],col[1],col[2]),PDFLib.setFontAndSize(PDFName.of(r0.fname),r0.fsRaw),PDFLib.setCharacterSpacing(tc),PDFLib.setWordSpacing(r0.tw),PDFLib.setCharacterSqueeze(r0.th*100),PDFLib.setTextMatrix(...r0.M),PDFLib.setTextRise(r0.rise||0),PDFLib.showText(PDFLib.PDFHexString.of(hex)),PDFLib.endText(),PDFLib.popGraphicsState());
+        orig++;
+      } else {
+        const key=pg.node.newFontDictionary(f.name,f.ref), size=r0.fsUser||12, text=clean(j.text), nat=f.widthOfTextAtSize(text,size), k=nat>0?j.g.len/nat:1, tz=(fit&&k>=.7&&k<=1.4)?k*100:100;
+        pg.pushOperators(PDFLib.pushGraphicsState(),PDFLib.beginText(),PDFLib.setFillingRgbColor(col[0],col[1],col[2]),PDFLib.setFontAndSize(key,size),PDFLib.setCharacterSqueeze(tz),PDFLib.setTextMatrix(j.g.u[0],j.g.u[1],-j.g.u[1],j.g.u[0],j.g.s[0],j.g.s[1]),PDFLib.showText(f.encodeText(text)),PDFLib.endText(),PDFLib.popGraphicsState());
+        std++;
+      }
+    }
+    elMsg=(orig?`${orig} piece${orig>1?'s':''} set in the original font`:'')+(orig&&std?', ':'')+(std?`${std} in ${fam} (the original font on this page lacks some characters)`:'')+(orig||std?'.':'Done.');
+  });
+}
+$('tApply').onclick=()=>tApply(false); $('tDel').onclick=()=>tApply(true);
+async function pdfText(idx,prog){
+  let out='';
+  for(const n of idx){
+    if(prog) prog(n); await tick();
+    const tc=await (await pdfDoc.getPage(n)).getTextContent(); let ly=null,lx=0,s2='';
+    for(const t of tc.items){
+      if(!('str' in t)) continue; const y=t.transform[5], x=t.transform[4];
+      if(ly!==null){ if(Math.abs(y-ly)>(t.height||8)*.5) s2+='\n'; else if(x-lx>1&&!s2.endsWith(' ')&&!t.str.startsWith(' ')) s2+=' '; }
+      s2+=t.str; ly=y; lx=x+t.width;
+    }
+    out+=(idx.length>1?`--- Page ${n} ---\n`:'')+s2.trim()+(idx.length>1?'\n\n':'');
+  }
+  return out;
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){}
+  try{ const a=document.createElement('textarea'); a.value=t; a.style.cssText='position:fixed;opacity:0'; document.body.appendChild(a); a.select(); const ok=document.execCommand('copy'); a.remove(); return ok; }catch(e){ return false; }
+}
+$('tCopy').onclick=async()=>{
+  if(!pdfDoc) return; let t='';
+  try{
+    if(T.sel.size){
+      const pcs=[...T.sel].map(id=>T.runs.find(r=>r.id===id)).filter(Boolean).sort((a,b)=>(b.s[1]-a.s[1])||(a.s[0]-b.s[0]));
+      t=pcs.map((r,i)=>{ const v=document.querySelector(`#tList input[data-id="${r.id}"]`), x=v?v.value:r.label; if(!i) return x; return (Math.abs(pcs[i-1].s[1]-r.s[1])>.5*r.fsUser?'\n':' ')+x; }).join('');
+    } else t=await pdfText([EL.page]);
+    if(!t.trim()){ $('tNote').textContent='No selectable text found on this page.'; return; }
+    const ok=await copyText(t), n=$('tNote'); n.textContent=ok?`Copied ${t.length} characters ${T.sel.size?'from the selected text':'from this page'}.`:'Copying is blocked here. Select the text below and copy it manually.';
+    if(!ok){ const ta=document.createElement('textarea'); ta.className='xin'; ta.readOnly=true; ta.value=t; ta.rows=4; ta.style.marginTop='6px'; n.appendChild(ta); ta.focus(); ta.select(); }
+  }catch(e){ $('tNote').textContent='Failed: '+(e.message||e); }
+};
+$('tTxt').onclick=async()=>{
+  if(!pdfDoc) return;
+  try{
+    const all=Array.from({length:pdfDoc.numPages},(_,i)=>i+1); $('tNote').textContent='Reading text\u2026';
+    const t=await pdfText(all,n=>{ $('tNote').textContent=`Reading page ${n} of ${pdfDoc.numPages}\u2026`; });
+    if(!t.replace(/--- Page \d+ ---|\s/g,'')){ $('tNote').textContent='No selectable text found. This may be a scanned PDF (OCR isn\u2019t included).'; return; }
+    await saveBytes(new TextEncoder().encode(t),`${base()}-text.txt`,$('tNote'));
+  }catch(e){ $('tNote').textContent='Failed: '+(e.message||e); }
+};
+
+let armed=null;
+$('newFile').onclick=()=>{
+  const b=$('newFile');
+  if(items.length&&!armed){ b.textContent='Discard edits?'; armed=setTimeout(()=>{ armed=null; b.textContent='← New file'; },4000); return; }
+  clearTimeout(armed); armed=null; b.textContent='← New file'; $('again').click();
+};
+$('file').onchange = e => e.target.files[0] && load(e.target.files[0]);
+const dz = $('drop');
+['dragover','dragenter'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('over')}));
+['dragleave','drop'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove('over')}));
+dz.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) load(f); });
+dz.onclick = () => $('file').click();
+$('go').onclick = run;
+$('save').onclick = save;
+$('again').onclick = () => { state.out=null; $('rnote').textContent=''; elH.u.length=elH.r.length=0; $('file').value=''; idb.del('file').catch(()=>{}); idb.del('items').catch(()=>{}); ['tabs','editor','panel','result','orgp','elp'].forEach(i=>$(i).classList.add('hide')); $('drop').classList.remove('hide'); };
+</script>
+</body>
+</html>
