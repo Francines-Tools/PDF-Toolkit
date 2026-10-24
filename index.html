@@ -961,10 +961,191 @@ $('rgPdf').onclick=async()=>{
 };
 
 /* fonts */
+/* ---------- CFF fonts -> OpenType (.otf) ---------- */
+const CFFSTD='.notdef space exclam quotedbl numbersign dollar percent ampersand quoteright parenleft parenright asterisk plus comma hyphen period slash zero one two three four five six seven eight nine colon semicolon less equal greater question at A B C D E F G H I J K L M N O P Q R S T U V W X Y Z bracketleft backslash bracketright asciicircum underscore quoteleft a b c d e f g h i j k l m n o p q r s t u v w x y z braceleft bar braceright asciitilde exclamdown cent sterling fraction yen florin section currency quotesingle quotedblleft guillemotleft guilsinglleft guilsinglright fi fl endash dagger daggerdbl periodcentered paragraph bullet quotesinglbase quotedblbase quotedblright guillemotright ellipsis perthousand questiondown grave acute circumflex tilde macron breve dotaccent dieresis ring cedilla hungarumlaut ogonek caron emdash AE ordfeminine Lslash Oslash OE ordmasculine ae dotlessi lslash oslash oe germandbls onesuperior logicalnot mu trademark Eth onehalf plusminus Thorn onequarter divide brokenbar degree thorn threequarters twosuperior registered minus eth multiply threesuperior copyright Aacute Acircumflex Adieresis Agrave Aring Atilde Ccedilla Eacute Ecircumflex Edieresis Egrave Iacute Icircumflex Idieresis Igrave Ntilde Oacute Ocircumflex Odieresis Ograve Otilde Scaron Uacute Ucircumflex Udieresis Ugrave Yacute Ydieresis Zcaron aacute acircumflex adieresis agrave aring atilde ccedilla eacute ecircumflex edieresis egrave iacute icircumflex idieresis igrave ntilde oacute ocircumflex odieresis ograve otilde scaron uacute ucircumflex udieresis ugrave yacute ydieresis zcaron exclamsmall Hungarumlautsmall dollaroldstyle dollarsuperior ampersandsmall Acutesmall parenleftsuperior parenrightsuperior twodotenleader onedotenleader zerooldstyle oneoldstyle twooldstyle threeoldstyle fouroldstyle fiveoldstyle sixoldstyle sevenoldstyle eightoldstyle nineoldstyle commasuperior threequartersemdash periodsuperior questionsmall asuperior bsuperior centsuperior dsuperior esuperior isuperior lsuperior msuperior nsuperior osuperior rsuperior ssuperior tsuperior ff ffi ffl parenleftinferior parenrightinferior Circumflexsmall hyphensuperior Gravesmall Asmall Bsmall Csmall Dsmall Esmall Fsmall Gsmall Hsmall Ismall Jsmall Ksmall Lsmall Msmall Nsmall Osmall Psmall Qsmall Rsmall Ssmall Tsmall Usmall Vsmall Wsmall Xsmall Ysmall Zsmall colonmonetary onefitted rupiah Tildesmall exclamdownsmall centoldstyle Lslashsmall Scaronsmall Zcaronsmall Dieresissmall Brevesmall Caronsmall Dotaccentsmall Macronsmall figuredash hypheninferior Ogoneksmall Ringsmall Cedillasmall questiondownsmall oneeighth threeeighths fiveeighths seveneighths onethird twothirds zerosuperior foursuperior fivesuperior sixsuperior sevensuperior eightsuperior ninesuperior zeroinferior oneinferior twoinferior threeinferior fourinferior fiveinferior sixinferior seveninferior eightinferior nineinferior centinferior dollarinferior periodinferior commainferior Agravesmall Aacutesmall Acircumflexsmall Atildesmall Adieresissmall Aringsmall AEsmall Ccedillasmall Egravesmall Eacutesmall Ecircumflexsmall Edieresissmall Igravesmall Iacutesmall Icircumflexsmall Idieresissmall Ethsmall Ntildesmall Ogravesmall Oacutesmall Ocircumflexsmall Otildesmall Odieresissmall OEsmall Oslashsmall Ugravesmall Uacutesmall Ucircumflexsmall Udieresissmall Yacutesmall Thornsmall Ydieresissmall 001.000 001.001 001.002 001.003 Black Bold Book Light Medium Regular Roman Semibold'.split(' '), CFFSTDU=[0,32,33,34,35,36,37,38,8217,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,8216,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,161,162,163,8260,165,402,167,164,39,8220,171,8249,8250,64257,64258,8211,8224,8225,183,182,8226,8218,8222,8221,187,8230,8240,191,96,180,710,732,175,728,729,168,730,184,733,731,711,8212,198,170,321,216,338,186,230,305,322,248,339,223,185,172,181,8482,208,189,177,222,188,247,166,176,254,190,178,174,8722,240,215,179,169,193,194,196,192,197,195,199,201,202,203,200,205,206,207,204,209,211,212,214,210,213,352,218,219,220,217,221,376,381,225,226,228,224,229,227,231,233,234,235,232,237,238,239,236,241,243,244,246,242,245,353,250,251,252,249,253,255,382,63265,63224,63268,63204,63270,63412,8317,8318,8229,8228,63280,63281,63282,63283,63284,63285,63286,63287,63288,63289,63202,63198,63208,63295,63209,63210,63200,63211,63212,63213,63214,63215,8319,63216,63217,63218,63219,64256,64259,64260,8333,8334,63222,63206,63328,63329,63330,63331,63332,63333,63334,63335,63336,63337,63338,63339,63340,63341,63342,63343,63344,63345,63346,63347,63348,63349,63350,63351,63352,63353,63354,8353,63196,63197,63230,63393,63394,63225,63229,63231,63400,63220,63221,63223,63407,8210,63205,63227,63228,63416,63423,8539,8540,8541,8542,8531,8532,8304,8308,8309,8310,8311,8312,8313,8320,8321,8322,8323,8324,8325,8326,8327,8328,8329,63199,63203,63207,63201,63456,63457,63458,63459,63460,63461,63462,63463,63464,63465,63466,63467,63468,63469,63470,63471,63472,63473,63474,63475,63476,63477,63478,63226,63480,63481,63482,63483,63484,63485,63486,63487,0,0,0,0,0,0,0,0,0,0,0,0];
+/* ---- bare CFF -> OpenType (OTF) wrapper ---- */
+const ru16=(b,o)=>(b[o]<<8)|b[o+1];
+function cffIndex(b,o){
+  const n=ru16(b,o); if(!n) return {items:[],end:o+2};
+  const os=b[o+2], offs=[];
+  for(let i=0;i<=n;i++){ let v=0; for(let k=0;k<os;k++) v=v*256+b[o+3+i*os+k]; offs.push(v); }
+  const base=o+3+(n+1)*os-1;
+  return {items:offs.slice(0,-1).map((x,i)=>[base+x,base+offs[i+1]]),end:base+offs[n]};
+}
+function cffDict(b,s,e){
+  const d={}; let st=[], i=s;
+  while(i<e){
+    const c=b[i];
+    if(c<=21){ let op=c; i++; if(c===12){ op=1200+b[i]; i++; } d[op]=st; st=[]; }
+    else if(c===28){ st.push(((b[i+1]<<8)|b[i+2])<<16>>16); i+=3; }
+    else if(c===29){ st.push((b[i+1]<<24)|(b[i+2]<<16)|(b[i+3]<<8)|b[i+4]); i+=5; }
+    else if(c===30){ let str='', done=false; i++; while(!done&&i<e){ const v=b[i++]; for(const nb of [v>>4,v&15]){ if(nb===15){ done=true; break; } str+=nb<10?nb:nb===10?'.':nb===11?'E':nb===12?'E-':nb===14?'-':''; } } st.push(parseFloat(str)||0); }
+    else if(c>=32&&c<=246){ st.push(c-139); i++; }
+    else if(c>=247&&c<=250){ st.push((c-247)*256+b[i+1]+108); i+=2; }
+    else if(c>=251&&c<=254){ st.push(-(c-251)*256-b[i+1]-108); i+=2; }
+    else i++;
+  }
+  return d;
+}
+function csWidth(b,gs,ls,s,e,defW,nomW){
+  const st=[]; let found=false, res=defW;
+  const bias=x=>x.items.length<1240?107:x.items.length<33900?1131:32768;
+  const run=(s2,e2,depth)=>{
+    let i=s2;
+    while(i<e2&&!found){
+      const c=b[i];
+      if(c>=32||c===28){
+        if(c===28){ st.push(((b[i+1]<<8)|b[i+2])<<16>>16); i+=3; }
+        else if(c<=246){ st.push(c-139); i++; }
+        else if(c<=250){ st.push((c-247)*256+b[i+1]+108); i+=2; }
+        else if(c<=254){ st.push(-(c-251)*256-b[i+1]-108); i+=2; }
+        else { st.push(((b[i+1]<<24)|(b[i+2]<<16)|(b[i+3]<<8)|b[i+4])/65536); i+=5; }
+        continue;
+      }
+      i++;
+      if(c===10||c===29){
+        const idx=st.pop(), tab=c===10?ls:gs;
+        if(tab&&depth<10){ const it=tab.items[idx+bias(tab)]; if(it) run(it[0],it[1],depth+1); }
+        continue;
+      }
+      if(c===11) return;
+      const n=st.length; let has;
+      if(c===1||c===3||c===18||c===23||c===19||c===20) has=n%2===1;
+      else if(c===21) has=n>2; else if(c===22||c===4) has=n>1; else if(c===14) has=n===1||n===5;
+      else { found=true; return; }
+      found=true; res=has?nomW+st[0]:defW; return;
+    }
+  };
+  run(s,e,0); return res;
+}
+function parseCff(b){
+  const nameI=cffIndex(b,b[2]), topI=cffIndex(b,nameI.end), strI=cffIndex(b,topI.end), gsubrs=cffIndex(b,strI.end);
+  const top=cffDict(b,topI.items[0][0],topI.items[0][1]);
+  const cs=cffIndex(b,top[17][0]), n=cs.items.length, cid=!!top[1230], chars=[0], co=top[15]?top[15][0]:0;
+  if(co>2){
+    const f=b[co]; let p=co+1;
+    if(f===0){ for(let g=1;g<n;g++){ chars.push(ru16(b,p)); p+=2; } }
+    else while(chars.length<n){ const first=ru16(b,p); p+=2; let left; if(f===1) left=b[p++]; else { left=ru16(b,p); p+=2; } for(let k=0;k<=left&&chars.length<n;k++) chars.push(first+k); }
+  } else for(let g=1;g<n;g++) chars.push(g);
+  let defW=0, nomW=0, lsubrs=null;
+  if(!cid&&top[18]){ const po=top[18][1], pr=cffDict(b,po,po+top[18][0]); defW=(pr[20]||[0])[0]; nomW=(pr[21]||[0])[0]; if(pr[19]) lsubrs=cffIndex(b,po+pr[19][0]); }
+  const sname=sid=>sid<CFFSTD.length?CFFSTD[sid]:(strI.items[sid-CFFSTD.length]?String.fromCharCode(...b.slice(...strI.items[sid-CFFSTD.length])):'');
+  return {n,cid,chars,top,cs,defW,nomW,sname,bbox:top[5],gsubrs,lsubrs};
+}
+function cffToOtf(b,opt){
+  const f=parseCff(b), n=f.n, widths=[];
+  for(let g=0;g<n;g++){
+    let w=null;
+    if(f.cid){ if(opt.widthOfCid) w=opt.widthOfCid(f.chars[g]); }
+    else w=csWidth(b,f.gsubrs,f.lsubrs,f.cs.items[g][0],f.cs.items[g][1],f.defW,f.nomW);
+    widths.push(Math.max(0,Math.round(w==null?(opt.defaultWidth||500):w)));
+  }
+  // unicode -> gid
+  const map=new Map();
+  if(f.cid){
+    const c2g=new Map(); f.chars.forEach((c,g)=>{ if(!c2g.has(c)) c2g.set(c,g); });
+    const best=new Map();
+    for(const [code,u] of [...(opt.uni||new Map()).entries()].sort((x,y)=>x[0]-y[0])){
+      if([...u].length!==1) continue; const g=c2g.get(code); if(!(g>0)) continue;
+      const cp=u.codePointAt(0); if(cp>=0xFFFF) continue; const cnt=(opt.prefer&&opt.prefer.get(code))||0, cur=best.get(cp);
+      if(!cur||cnt>cur.cnt) best.set(cp,{g,cnt});
+    }
+    for(const [cp,v] of best) map.set(cp,v.g);
+  } else {
+    f.chars.forEach((sid,g)=>{
+      if(g===0) return; let cp=sid<CFFSTDU.length?CFFSTDU[sid]:0;
+      if(!cp){ const nm=f.sname(sid), m=/^uni([0-9A-F]{4})$/.exec(nm)||/^u([0-9A-F]{4,5})$/.exec(nm); if(m) cp=parseInt(m[1],16); }
+      if(cp&&cp<0xFFFF&&!map.has(cp)) map.set(cp,g);
+    });
+  }
+  const bb=f.bbox&&f.bbox.length===4?f.bbox.map(Math.round):[0,-250,1000,900], asc=opt.ascent||800, desc=opt.descent||-200;
+  // ---- table builders
+  const be=(len,fn)=>{ const a=new Uint8Array(len), dv=new DataView(a.buffer); fn(dv,a); return a; };
+  const sorted=[...map.entries()].sort((a,b2)=>a[0]-b2[0]), segs=[];
+  for(const [cp,g] of sorted){ const l=segs[segs.length-1]; if(l&&cp===l.e+1&&g-cp===l.d){ l.e=cp; } else segs.push({s:cp,e:cp,d:g-cp}); }
+  segs.push({s:0xFFFF,e:0xFFFF,d:1}); const sc=segs.length;
+  const cmapLen=12+16+8*sc;
+  const cmap=be(cmapLen,(dv)=>{ dv.setUint16(0,0); dv.setUint16(2,1); dv.setUint16(4,3); dv.setUint16(6,1); dv.setUint32(8,12);
+    let o=12; dv.setUint16(o,4); dv.setUint16(o+2,16+8*sc); dv.setUint16(o+4,0); dv.setUint16(o+6,sc*2);
+    let pw=1,es=0; while(pw*2<=sc){ pw*=2; es++; } dv.setUint16(o+8,pw*2); dv.setUint16(o+10,es); dv.setUint16(o+12,sc*2-pw*2);
+    o+=14; segs.forEach((s,i)=>dv.setUint16(o+i*2,s.e)); o+=sc*2+2; segs.forEach((s,i)=>dv.setUint16(o+i*2,s.s)); o+=sc*2; segs.forEach((s,i)=>dv.setUint16(o+i*2,s.d&0xFFFF)); });
+  const head=be(54,(dv)=>{ dv.setUint32(0,0x00010000); dv.setUint32(4,0x00010000); dv.setUint32(12,0x5F0F3CF5); dv.setUint16(16,3); const ts=Math.floor(Date.now()/1000)+2082844800; dv.setUint32(20,Math.floor(ts/4294967296)); dv.setUint32(24,ts>>>0); dv.setUint32(28,Math.floor(ts/4294967296)); dv.setUint32(32,ts>>>0); dv.setUint16(18,1000);
+    dv.setInt16(36,bb[0]); dv.setInt16(38,bb[1]); dv.setInt16(40,bb[2]); dv.setInt16(42,bb[3]); dv.setUint16(46,8); dv.setInt16(48,2); });
+  const maxW=Math.max(1,...widths);
+  const hhea=be(36,(dv)=>{ dv.setUint32(0,0x00010000); dv.setInt16(4,asc); dv.setInt16(6,desc); dv.setUint16(10,maxW); dv.setInt16(16,bb[2]); dv.setInt16(18,1); dv.setUint16(34,n); });
+  const hmtx=be(4*n,(dv)=>{ widths.forEach((w,g)=>dv.setUint16(g*4,w)); });
+  const maxp=be(6,(dv)=>{ dv.setUint32(0,0x00005000); dv.setUint16(4,n); });
+  const avg=Math.round(widths.reduce((a,x)=>a+x,0)/n)||500, cps=[...map.keys()], first=cps.length?Math.min(...cps):0x20, last=cps.length?Math.max(...cps):0x20;
+  const os2=be(96,(dv)=>{
+    dv.setUint16(0,2); dv.setInt16(2,avg); dv.setUint16(4,400); dv.setUint16(6,5); dv.setUint16(8,0);
+    dv.setInt16(10,650); dv.setInt16(12,600); dv.setInt16(14,0); dv.setInt16(16,75); dv.setInt16(18,650); dv.setInt16(20,600); dv.setInt16(22,0); dv.setInt16(24,350); dv.setInt16(26,50); dv.setInt16(28,250);
+    dv.setUint16(62,0x40); dv.setUint16(64,Math.min(first,0xFFFF)); dv.setUint16(66,Math.min(last,0xFFFF));
+    dv.setInt16(68,asc); dv.setInt16(70,desc); dv.setInt16(72,0); dv.setUint16(74,Math.max(asc,bb[3])); dv.setUint16(76,Math.max(-desc,-bb[1]));
+    dv.setUint32(78,1); dv.setInt16(86,500); dv.setInt16(88,700); dv.setUint16(90,0); dv.setUint16(92,0x20); dv.setUint16(94,1);
+  });
+  const nm=(opt.name||'Extracted').replace(/[^\x20-\x7E]/g,'').slice(0,60)||'Extracted', ps=nm.replace(/[^A-Za-z0-9-]/g,'')||'Extracted';
+  const strs=[[1,nm],[2,'Regular'],[4,nm],[6,ps]], rec=strs.length, strBytes=[];
+  let off=0; const recs=strs.map(([id,s])=>{ const by=new Uint8Array(s.length*2); for(let i=0;i<s.length;i++){ by[i*2]=s.charCodeAt(i)>>8; by[i*2+1]=s.charCodeAt(i)&255; } const r={id,len:by.length,off}; off+=by.length; strBytes.push(by); return r; });
+  const name=new Uint8Array(6+12*rec+off), ndv=new DataView(name.buffer); ndv.setUint16(2,rec); ndv.setUint16(4,6+12*rec);
+  recs.forEach((r,i)=>{ const o=6+i*12; ndv.setUint16(o,3); ndv.setUint16(o+2,1); ndv.setUint16(o+4,0x409); ndv.setUint16(o+6,r.id); ndv.setUint16(o+8,r.len); ndv.setUint16(o+10,r.off); name.set(strBytes[i],6+12*rec+r.off); });
+  const post=be(32,(dv)=>{ dv.setUint32(0,0x00030000); dv.setInt16(8,-100); dv.setInt16(10,50); });
+  const tables=[['CFF ',b],['OS/2',os2],['cmap',cmap],['head',head],['hhea',hhea],['hmtx',hmtx],['maxp',maxp],['name',name],['post',post]].sort((x,y)=>x[0]<y[0]?-1:1);
+  const nt=tables.length; let pos=12+16*nt; const place=tables.map(([tag,data])=>{ const p=pos; pos+=(data.length+3)&~3; return {tag,data,p}; });
+  const out=new Uint8Array(pos), dv=new DataView(out.buffer);
+  out.set([79,84,84,79],0); dv.setUint16(4,nt); let pw=1,es=0; while(pw*2<=nt){ pw*=2; es++; } dv.setUint16(6,pw*16); dv.setUint16(8,es); dv.setUint16(10,nt*16-pw*16);
+  const csum=(a)=>{ let s=0; const l=(a.length+3)&~3; for(let i=0;i<l;i+=4) s=(s+(((a[i]||0)<<24)|((a[i+1]||0)<<16)|((a[i+2]||0)<<8)|(a[i+3]||0)))>>>0; return s; };
+  place.forEach((t,i)=>{ const o=12+i*16; for(let k=0;k<4;k++) out[o+k]=t.tag.charCodeAt(k); dv.setUint32(o+4,csum(t.data)); dv.setUint32(o+8,t.p); dv.setUint32(o+12,t.data.length); out.set(t.data,t.p); });
+  const hp=place.find(t=>t.tag==='head').p; dv.setUint32(hp+8,(0xB1B0AFBA-csum(out))>>>0);
+  return {bytes:out,glyphs:n,chars:map.size,cid:f.cid};
+}
+
+function parseToUni(fd){
+  const u2c=new Map(), tu=fd.lookupMaybe(N('ToUnicode'),PDFRawStream); if(!tu) return u2c;
+  const tb=PDFLib.decodePDFRawStream(tu).decode(), t=bstr(tb,0,tb.length);
+  const u=h=>{ h=h.padStart(Math.ceil(h.length/4)*4,'0'); return String.fromCharCode(...(h.match(/.{4}/g)||[]).map(x=>parseInt(x,16))); };
+  for(const blk of t.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) for(const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) u2c.set(parseInt(m[1],16),u(m[2]));
+  for(const blk of t.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) for(const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F]+>|\[[^\]]*\])/g)){
+    const lo=parseInt(m[1],16), hi=Math.min(parseInt(m[2],16),lo+70000);
+    if(m[3][0]==='<'){ const b0=u(m[3].slice(1,-1)); if(b0.length===1) for(let c=lo;c<=hi;c++) u2c.set(c,String.fromCharCode(b0.charCodeAt(0)+c-lo)); }
+    else [...m[3].matchAll(/<([0-9a-fA-F]+)>/g)].forEach((a,i)=>u2c.set(lo+i,u(a[1])));
+  }
+  return u2c;
+}
+async function fontUsage(doc){
+  const use=new Map(), pages=doc.getPages();
+  for(let i=0;i<pages.length;i++){
+    if(i%5===0){ $('elnote').textContent=`Checking which glyphs the document uses\u2026 page ${i+1} of ${pages.length}`; await tick(); }
+    try{
+      const b=pageBytes(pages[i]), runs=await computeRuns(doc,pages[i],b,parseContent(b));
+      for(const r of runs){ if(!r.fd||!r.codes) continue; let m=use.get(r.fd); if(!m) use.set(r.fd,m=new Map()); r.codes.forEach(c=>m.set(c,(m.get(c)||0)+1)); }
+    }catch(e){}
+  }
+  return use;
+}
+async function fontOtf(it){
+  try{
+    const doc=await getXDoc(), f=filterOf(it.st.dict);
+    if(f!==''&&f!=='/FlateDecode'){ $('elnote').textContent='This font uses an unsupported compression.'; return; }
+    const bytes=f?await inflate(it.st.contents):it.st.contents, own=it.owner;
+    if(!own){ $('elnote').textContent='Couldn\u2019t find the font that uses this file.'; return; }
+    if(!EL.usage) EL.usage=await fontUsage(doc);
+    const fi=own.top.lookup(N('Subtype'))?.toString()==='/Type0'?await fontInfo(doc,own.top,new Map()):null;
+    const desc=own.desc.lookupMaybe(N('FontDescriptor'),PDFDict), asc=desc?nv(desc.lookup(N('Ascent'))):0, dsc=desc?nv(desc.lookup(N('Descent'))):0;
+    const r=cffToOtf(bytes,{name:it.name.replace(/^[A-Z]{6}\+/,''),uni:parseToUni(own.top),prefer:EL.usage.get(own.top),widthOfCid:fi?(c=>fi.w(c)):null,ascent:asc>0&&asc<2000?Math.round(asc):800,descent:dsc<0&&dsc>-1000?Math.round(dsc):-200});
+    await saveBytes(r.bytes,`${it.name.replace(/^[A-Z]{6}\+/,'')}.otf`,$('elnote'));
+    $('elnote').textContent=`Saved .otf: ${r.glyphs} glyphs, ${r.chars} characters mapped.`;
+  }catch(e){ $('elnote').textContent='Couldn\u2019t build the .otf: '+(e.message||e); }
+}
 async function elFonts(){
   const box=$('e-fnt'); box.innerHTML='<p class="muted">Scanning fonts\u2026</p>';
   try{
-    const doc=await getXDoc(), seen=new Set(), list=[];
+    const doc=await getXDoc(), seen=new Set(), list=[], owners=new Map();
+    for(const [ref,obj] of doc.context.enumerateIndirectObjects()){
+      if(!(obj instanceof PDFDict)||obj.lookup(N('Type'))?.toString()!=='/Font') continue;
+      const sub=obj.lookup(N('Subtype'))?.toString();
+      if(sub==='/Type0'){ const dd=obj.lookupMaybe(N('DescendantFonts'),PDFArray)?.lookupMaybe(0,PDFDict), r2=dd&&dd.get(N('FontDescriptor')); if(r2) owners.set(r2.toString(),{top:obj,desc:dd}); }
+      else if(sub!=='/CIDFontType0'&&sub!=='/CIDFontType2'){ const r2=obj.get(N('FontDescriptor')); if(r2&&!owners.has(r2.toString())) owners.set(r2.toString(),{top:obj,desc:obj}); }
+    }
     for(const [ref,obj] of doc.context.enumerateIndirectObjects()){
       if(!(obj instanceof PDFDict)||obj.lookup(N('Type'))?.toString()!=='/FontDescriptor') continue;
       for(const k of ['FontFile','FontFile2','FontFile3']){
@@ -973,15 +1154,17 @@ async function elFonts(){
         const name=(obj.lookup(N('FontName'))?.toString()||'/Font').slice(1);
         if(seen.has(name)) continue; seen.add(name);
         const sub=st.dict.lookup(N('Subtype'))?.toString();
-        list.push({name,st,ext:k==='FontFile2'?'ttf':k==='FontFile'?'t1':sub==='/OpenType'?'otf':'cff',sub:/^[A-Z]{6}\+/.test(name)});
+        list.push({name,st,ext:k==='FontFile2'?'ttf':k==='FontFile'?'t1':sub==='/OpenType'?'otf':'cff',sub:/^[A-Z]{6}\+/.test(name),owner:owners.get(ref.toString())});
       }
     }
     if(!list.length){ box.innerHTML='<p class="muted">No embedded font files found. Fonts that aren\u2019t embedded rely on the viewer\u2019s own fonts.</p>'; return; }
-    box.innerHTML='<p class="note" style="margin:0 0 6px">Fonts in PDFs are usually subsets containing only the characters used, and may be licensed. Extracted files often can\u2019t be installed as-is.</p>';
+    box.innerHTML='<p class="note" style="margin:0 0 6px">Fonts in PDFs are usually subsets containing only the characters used, and may be licensed. A bare .cff file isn\u2019t installable; <b>Save .otf</b> wraps it into a normal OpenType font with a character map, so it opens in font tools.</p>';
     list.forEach(it=>{
       const row=document.createElement('div'); row.className='xrow';
-      row.innerHTML=`<div class="xinfo"><b>${it.name.replace(/</g,'')}</b><br>${it.ext.toUpperCase()} \u00b7 ${fmt(it.st.contents.length)}${it.sub?' \u00b7 subset':''}</div><button>Save</button>`;
-      row.lastChild.onclick=async()=>{
+      row.innerHTML=`<div class="xinfo"><b>${it.name.replace(/</g,'')}</b><br>${it.ext.toUpperCase()} \u00b7 ${fmt(it.st.contents.length)}${it.sub?' \u00b7 subset':''}</div><div class="eb"><button data-a="raw">Save .${it.ext}</button>${it.ext==='cff'?'<button data-a="otf">Save .otf</button>':''}</div>`;
+      row.querySelector('.eb').onclick=async e=>{
+        const b=e.target.closest('button'); if(!b) return;
+        if(b.dataset.a==='otf'){ fontOtf(it); return; }
         const f=filterOf(it.st.dict);
         if(f!==''&&f!=='/FlateDecode'){ xnote('This font uses an unsupported compression.'); return; }
         saveBytes(f?await inflate(it.st.contents):it.st.contents,`${it.name}.${it.ext}`,$('elnote'));
