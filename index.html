@@ -141,6 +141,7 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 .ib i{font-style:normal;position:absolute;right:2px;bottom:0;font-size:.6rem;font-weight:700}
 
 /* touch targets, theme, errors, new-file */
+#pages{overflow-anchor:none}
 :root{--warnbg:#fff4e0;--warntext:#5a3600}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--warnbg:#3a2d12;--warntext:#ffe2a8}}
 :root[data-theme="dark"]{--warnbg:#3a2d12;--warntext:#ffe2a8}
@@ -291,6 +292,7 @@ const WARNRE=/lacks some characters|If nothing happened|^(No (valid|images|selec
 const level=t=>ERRRE.test(t)?'err':WARNRE.test(t)?'warn':'info';
 ['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const el=$(id), t=el.textContent.trim(); if(!t) return; const lv=level(t); el.classList.remove('t-err','t-warn','t-info'); el.classList.add('t-'+lv); if(lv==='err'||(lv==='warn'&&!/If nothing happened/.test(t))) banner(t,id,lv); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
 let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false, lastDesc='';
+let rqN=0; const rtrack=async f=>{ rqN++; try{ return await f(); } finally{ rqN--; } };
 const pending=()=>dirty||!!(state.out&&!state.outSaved)||!!(org&&org.undo.length);
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
 function silence(){
@@ -642,7 +644,7 @@ async function initEditor(){
     if(pdfDoc) pdfDoc.destroy();
     pdfDoc = await pdfjsLib.getDocument({data:state.bytes.slice()}).promise;
     const W = Math.min(document.querySelector('main').clientWidth-32, 800);
-    io = new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ io.unobserve(en.target); drawPg(en.target._p); } }),{rootMargin:'800px'});
+    io = new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ io.unobserve(en.target); rtrack(()=>drawPg(en.target._p)); } }),{rootMargin:'800px'});
     for(let n=1;n<=pdfDoc.numPages;n++){
       const page = await pdfDoc.getPage(n), v = page.view, rot = (page.rotate||0)%360;
       let wpt=v[2]-v[0], hpt=v[3]-v[1]; if(rot===90||rot===270) [wpt,hpt]=[hpt,wpt];
@@ -1308,7 +1310,7 @@ const OI={l:'<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',r:'<svg 
 async function initOrg(){
   if(!pdfDoc){ $('onote').textContent='The page viewer isn\u2019t ready yet. Try again in a moment.'; return; }
   const o=org={src:[{name:state.name,doc:pdfDoc,bytes:state.bytes,tag:''}],pages:[],sel:-1,undo:[],q:Promise.resolve(),
-    io:new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ o.io.unobserve(en.target); const t=en.target; o.q=o.q.then(()=>thumb(o,t._e,t)); } }),{rootMargin:'400px'})};
+    io:new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){ o.io.unobserve(en.target); const t=en.target; rqN++; o.q=o.q.then(()=>thumb(o,t._e,t)).finally(()=>{ rqN--; }); } }),{rootMargin:'400px'})};
   $('onote').textContent='';
   for(let n=1;n<=pdfDoc.numPages;n++){ if(org!==o) return; const vp=(await pdfDoc.getPage(n)).getViewport({scale:1}); o.pages.push({s:0,i:n-1,w:vp.width,h:vp.height}); }
   drawGrid(); ordUpd();
@@ -1663,7 +1665,7 @@ function elSec(k){
 function elRender(){
   const k=EL.sec, tot=pdfDoc?pdfDoc.numPages:1; EL.page=Math.min(Math.max(1,EL.page),tot); $('eLbl').textContent=`${EL.page}/${tot}`;
   const host=$('e-'+k), sc=document.scrollingElement||document.documentElement, y=sc.scrollTop; host.style.minHeight=host.offsetHeight+'px';
-  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); banner(m,'elnote'); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="err">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
+  rtrack(()=>({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]()).catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); banner(m,'elnote'); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="err">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
 }
 $('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
 $('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
@@ -1709,13 +1711,14 @@ function histGo(m){
   if(v==='l'){ if(EL){ if(m.s) EL.sec=m.s; if(m.pg) EL.page=m.pg; } else { elKeep=m.s||'img'; elKeepPage=m.pg||1; } }
   show(v); edScroll(m);
 }
+async function waitRender(){ await sleep(150); const t0=Date.now(); while(rqN>0&&Date.now()-t0<10000) await sleep(50); await sleep(500); }
 async function histStep(from,to,ing,done){
   if(histBusy||!from.length) return; histBusy=true; elHistBtns();
   const st=from.pop(), d=st.d||'Change';
   try{
     histGo(st);
-    toast(`${ing}: ${d}. Showing the current state first\u2026`,2600);
-    await sleep(1400);
+    toast(`${ing}: ${d}. Showing the current state first\u2026`,10000);
+    await waitRender();
     const now={b:state.bytes,it:serItems(),d:st.d,v:st.v,s:st.s,pg:st.pg};
     await restoreState(st); edScroll(st);
     to.push(now); if(to.length>30) to.shift();
@@ -1725,13 +1728,13 @@ async function histStep(from,to,ing,done){
 }
 const histUndo=()=>histStep(elH.u,elH.r,'Undoing','Undone'), histRedo=()=>histStep(elH.r,elH.u,'Redoing','Redone');
 async function edApply(){
-  const n=items.length; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
+  const n=items.length, sc=document.scrollingElement||document.documentElement, y0=sc.scrollTop; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
   $('enote').textContent='Applying\u2026'; await tick();
   try{
     const prev={b:state.bytes,it:serItems(),d:`Applied ${n} item${n>1?'s':''} to the PDF`,v:'e',pg:items[0].p.n}, bytes=await buildEdited();
     await load(new File([bytes],state.name,{type:'application/pdf'}));
     elH.u.push(prev); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; dirty=true; ckKey='';
-    show('e'); $('enote').textContent=`Applied ${n} item${n>1?'s':''} to the PDF in memory. Not saved to a file yet.`;
+    show('e'); sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; }); }); $('enote').textContent=`Applied ${n} item${n>1?'s':''} to the PDF in memory. Not saved to a file yet.`;
   }catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
 }
 $('elUndo').onclick=$('eUndo').onclick=histUndo; $('elRedo').onclick=$('eRedo').onclick=histRedo; $('eApply').onclick=edApply;
