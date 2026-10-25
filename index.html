@@ -141,6 +141,13 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 .ib i{font-style:normal;position:absolute;right:2px;bottom:0;font-size:.6rem;font-weight:700}
 
 /* touch targets, theme, errors, new-file */
+:root{--warnbg:#fff4e0;--warntext:#5a3600}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--warnbg:#3a2d12;--warntext:#ffe2a8}}
+:root[data-theme="dark"]{--warnbg:#3a2d12;--warntext:#ffe2a8}
+.note.t-err,.err{color:var(--danger)}
+.note.t-warn{color:var(--warn)}
+.note.t-info{color:var(--accent)}
+.errbar.warn{background:var(--warnbg);color:var(--warntext);border-color:var(--warn)}
 :root{color-scheme:light dark;--danger:#b3261e;--ondanger:#fff;--errbg:#fdecea;--errtext:#5c1410}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--danger:#ff8a80;--ondanger:#3a0d09;--errbg:#3a1b18;--errtext:#ffd9d4}}
 :root[data-theme="dark"]{--danger:#ff8a80;--ondanger:#3a0d09;--errbg:#3a1b18;--errtext:#ffd9d4}
@@ -161,7 +168,11 @@ label:has(>input[type=checkbox]){display:flex!important;align-items:center;gap:8
 .oct{flex-wrap:wrap}
 .oct button{flex:1 0 44px;width:auto;min-width:44px}
 .oct button.d,.eb button.d{color:var(--danger)}
-#elStick #elNav{flex-wrap:wrap}
+#elStick #elNav{flex-wrap:nowrap;gap:2px}
+#elStick{padding:6px 4px}
+#elType{flex:1 1 0;min-width:0;max-width:112px;font-size:.8rem;padding:4px 2px;text-overflow:ellipsis}
+#elPg{gap:0!important}
+#eLbl{min-width:34px!important}
 .head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
 .head #newFile{width:auto;flex:0 0 auto;background:transparent;color:var(--danger);border:1px solid var(--danger);padding:10px 14px;font-weight:600}
 button.danger{background:var(--danger);color:var(--ondanger)}
@@ -184,7 +195,7 @@ button.danger{background:var(--danger);color:var(--ondanger)}
 
 <div id="busyA" class="card hide muted">Analyzing…</div>
 
-<div id="tabs" class="tabs hide"><button class="tab sel" data-v="c">Compress</button><button class="tab" data-v="e">Sign &amp; edit</button><button class="tab" data-v="o">Pages</button><button class="tab" data-v="l">Elements</button></div>
+<div id="tabs" class="tabs hide"><button class="tab sel" data-v="c">Compress</button><button class="tab" data-v="e">Add</button><button class="tab" data-v="o">Pages</button><button class="tab" data-v="l">Elements</button></div>
 
 <div id="panel" class="hide">
 <div class="card">
@@ -197,18 +208,18 @@ button.danger{background:var(--danger);color:var(--ondanger)}
 </div>
 
 <div id="editor" class="hide">
-<div class="stick"><div class="tools"><button class="t" id="addSig">Add signature</button><button class="t" id="addTxt">Add text box</button><button class="t" id="addMono">Add mono box</button></div>
-<div class="tools"><button class="t" id="eSave">Save PDF</button><button class="t g" id="eCompress">Go to Compress</button></div>
-<p class="note" id="enote"></p>
+<div class="stick"><div class="tools"><button class="t" id="addSig">Signature</button><button class="t" id="addTxt">Text box</button><button class="t" id="addMono">Mono box</button></div>
+<div class="tools"><button class="t g ib" id="eUndo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><i id="eUc"></i></button><button class="t g ib" id="eRedo" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg><i id="eRc"></i></button><button class="t" id="eApply">Apply</button><button class="t g" id="eSave">Save PDF</button><button class="t g" id="eCompress">Go to Compress</button></div>
+<p class="note" id="eStat"></p><p class="note" id="enote"></p>
 <div id="sigTray" class="hide"></div>
 <div id="sel" class="hide"><div class="tools fmt"><select id="pFont"><option>Helvetica</option><option>Times</option><option>Courier</option></select><label id="pFsW" class="muted">Size <input type="number" id="pFs" min="4" max="96" style="width:58px"></label><label id="pCW" class="muted">Cells <input type="number" id="pCells" min="0" max="80" placeholder="auto" style="width:58px"></label><button class="t g f" id="pB"><b>B</b></button><button class="t g f" id="pI"><i>I</i></button><button class="t g f" id="pU"><u>U</u></button><span id="pAl"><button class="t g f" data-a="left"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg></button><button class="t g f" data-a="center"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M5 18h14"/></svg></button><button class="t g f" data-a="right"><svg viewBox="0 0 24 24"><path d="M4 6h16M10 12h10M6 18h14"/></svg></button></span><input type="color" id="pColor" value="#000000"><span id="pRotW" class="hide" style="display:flex;gap:6px;align-items:center"><button class="t g f" id="pRL" aria-label="Rotate left 90"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v5h5"/></svg></button><button class="t g f" id="pRR" aria-label="Rotate right 90"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></svg></button><input type="range" id="pRot" min="-180" max="180" value="0" style="width:120px"><span class="muted" id="pRotV" style="min-width:38px"></span></span></div></div></div>
-<p class="note">Tap an item to select it: drag its Move tab to reposition and the round corner handle to resize. Mono box: stretch it over a form field; letters spread evenly across the width. Set character cells to match the field’s number of squares.</p>
+<p class="note">Items are a draft on top of the pages until you tap Apply, which adds them to the PDF in memory. Apply doesn’t create a file; Save PDF does. Tap an item to select it: drag its Move tab to reposition and the round corner handle to resize. Mono box: stretch it over a form field; letters spread evenly across the width. Set character cells to match the field’s number of squares.</p>
 <p class="note warn hide" id="ewarn">Some pages are rotated; items on them can’t be exported accurately.</p>
 <input type="file" id="sigFile" accept="image/*" class="hide">
 <div id="pages"></div>
 </div>
 
-<div id="sigModal" class="modal hide"><div class="card" style="width:min(560px,100%);margin:0"><b>Draw your signature</b><canvas id="pad"></canvas><div class="tools"><button class="t g" id="padClear">Clear</button><button class="t g" id="padCancel">Cancel</button><button class="t" id="padSave">Add signature</button></div><p class="note">Saved in this browser so you can reuse it.</p></div></div>
+<div id="sigModal" class="modal hide"><div class="card" style="width:min(560px,100%);margin:0"><b>Draw your signature</b><canvas id="pad"></canvas><div class="tools"><button class="t g" id="padClear">Clear</button><button class="t g" id="padCancel">Cancel</button><button class="t" id="padSave">Place signature</button></div><p class="note">Saved in this browser so you can reuse it.</p></div></div>
 
 <div id="elp" class="hide">
 <div class="stick" id="elStick" style="margin-top:0"><div class="tools" id="elNav"><select id="elType" aria-label="Element type"><option value="img">Images</option><option value="txt">Text</option><option value="ann">Annotations</option><option value="att">Files</option><option value="fnt">Fonts</option><option value="bm">Bookmarks</option><option value="inf">Info</option><option value="cap">Capture</option></select><button class="t g ib" id="elUndo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><i id="elUc"></i></button><button class="t g ib" id="elRedo" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg><i id="elRc"></i></button><span id="elPg" style="display:flex;gap:2px;align-items:center;flex:0 0 auto"><button class="t g ib" id="ePrev" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="muted" id="eLbl" style="min-width:44px;text-align:center;font-size:.82rem"></span><button class="t g ib" id="eNext" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></span></div>
@@ -272,12 +283,14 @@ let state = { bytes:null, name:'', images:[], total:0, ests:[], rec:null, sel:nu
 const fmt = n => n >= 1048576 ? (n/1048576).toFixed(n>=10485760?1:2)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
 const N = s => PDFName.of(s);
 const errBar=$('errBar');
-function banner(m,src){ if(!m){ errBar.classList.add('hide'); errBar.dataset.src=''; return; } $('errTxt').textContent=m; errBar.dataset.src=src||''; errBar.classList.remove('hide'); }
-function showErr(m){ banner(m,'err'); }
+function banner(m,src,lv){ if(!m){ errBar.classList.add('hide'); errBar.dataset.src=''; return; } $('errTxt').textContent=m; errBar.dataset.src=src||''; errBar.classList.toggle('warn',lv==='warn'); errBar.classList.remove('hide'); }
+function showErr(m){ banner(m,'err','err'); }
 $('errX').onclick=()=>banner('');
-const ERRRE=/^(Failed|Couldn|Compression failed|Skipped|This (image|font|PDF)|No valid|No images|No selectable|Nothing to change|Add a signature|Drag on|Preview|The page viewer|Copying is blocked|Decryption)/;
-['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const t=$(id).textContent.trim(); if(!t) return; if(ERRRE.test(t)) banner(t,id); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
-let dirty=false;
+const ERRRE=/^(Failed|Couldn|Could not|Compression failed|This (image|font|PDF)|Preview|The page viewer|Decryption|Skipped)/;
+const WARNRE=/lacks some characters|If nothing happened|^(No (valid|images|selectable|editable)|Nothing to|Add a |Drag on|Copying is blocked)/;
+const level=t=>ERRRE.test(t)?'err':WARNRE.test(t)?'warn':'info';
+['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const el=$(id), t=el.textContent.trim(); if(!t) return; const lv=level(t); el.classList.remove('t-err','t-warn','t-info'); el.classList.add('t-'+lv); if(lv==='err'||(lv==='warn'&&!/If nothing happened/.test(t))) banner(t,id,lv); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
+let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false;
 const pending=()=>dirty||!!(state.out&&!state.outSaved)||!!(org&&org.undo.length);
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
 function silence(){
@@ -608,10 +621,10 @@ async function saveBytes0(out, name, note){
 const save = async () => { if(await saveBytes(state.out, state.name.replace(/\.pdf$/i,'') + '-compressed.pdf', $('rnote'))){ state.outSaved=true; dirty=false; } };
 
 /* ---------- Sign & edit ---------- */
-function show(v){
+function show(v){ curV=v;
   ['panel','prog','result','editor','orgp','elp'].forEach(i=>$(i).classList.add('hide'));
   $(v==='e'?'editor':v==='o'?'orgp':v==='l'?'elp':'panel').classList.remove('hide');
-  if(v==='l') elInit();
+  if(v==='l') elInit(); if(v==='e') elHistBtns();
   if(v==='o'&&!org) initOrg();
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('sel',t.dataset.v===v));
 }
@@ -653,19 +666,19 @@ function addItem(type,sig){
   const place=()=>{
     const r=p.wrap.getBoundingClientRect();
     it.x=clamp((p.wpt-it.w)/2,0,Math.max(0,p.wpt-it.w)); it.y=clamp((innerHeight*.45-r.top)/p.s-it.h/2,0,Math.max(0,p.hpt-it.h));
-    build(it); items.push(it); select(it); if(it.inp) it.inp.focus();
+    edCommit(); build(it); items.push(it); edStatus(); select(it); if(it.inp) it.inp.focus();
   };
   if(type==='sig'){ const im=new Image(); im.onload=()=>{ it.h=it.w*im.naturalHeight/im.naturalWidth; place(); }; im.src=sig; } else place();
 }
 function build(it){
-  const el=document.createElement('div'); el.className='it'; it.el=el;
+  const el=document.createElement('div'); el.className='it'; it.el=el; it.id=++edId;
   el.innerHTML='<div class="ctl"><span class="grip" title="Move" aria-label="Move"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span><span class="x" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="dup" title="Duplicate" aria-label="Duplicate"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></span></div><div class="rz"></div>';
   let body;
   if(it.type==='sig'){ body=document.createElement('img'); body.src=it.sig; body.className='sg'; body.draggable=false; drag(body,it,'m'); }
   else{
     body=document.createElement(it.type==='text'?'textarea':'input'); body.className=it.type==='text'?'tx':'mono'; body.spellcheck=false;
     body.placeholder=it.type==='text'?'Type here…':'ABC'; it.inp=body;
-    body.oninput=()=>{ it.text=body.value; layout(it); };
+    body.oninput=()=>{ edCommit('t'+it.id); it.text=body.value; layout(it); };
   }
   el.insertBefore(body,el.querySelector('.rz'));
   el.addEventListener('pointerdown',()=>select(it));
@@ -689,7 +702,7 @@ function drag(h,it,mode){
     e.preventDefault(); e.stopPropagation(); select(it);
     const sx=e.clientX, sy=e.clientY, o={x:it.x,y:it.y,w:it.w,h:it.h}; h.setPointerCapture(e.pointerId);
     const mv=ev=>{
-      const dx=(ev.clientX-sx)/it.p.s, dy=(ev.clientY-sy)/it.p.s;
+      const dx=(ev.clientX-sx)/it.p.s, dy=(ev.clientY-sy)/it.p.s; if(!mv.p&&(dx||dy)){ mv.p=1; edCommit(); }
       if(mode==='m'){ it.x=clamp(o.x+dx,0,it.p.wpt-it.w); it.y=clamp(o.y+dy,0,it.p.hpt-it.h); }
       else if(!it.rot){ it.w=clamp(o.w+dx,15,it.p.wpt-it.x); it.h=clamp(o.h+dy,8,it.p.hpt-it.y); }
       else{
@@ -712,10 +725,10 @@ function select(it){
   $('pFs').value=it.fs; $('pCells').value=it.cells||'';
   $('pFont').classList.toggle('hide',it.type!=='text'); $('pAl').classList.toggle('hide',it.type!=='text'); sync();
 }
-function del(it){ it.el.remove(); items=items.filter(i=>i!==it); touch(); dirty=true; if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
+function del(it){ edCommit(); it.el.remove(); items=items.filter(i=>i!==it); touch(); dirty=true; if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
 $('pages').addEventListener('pointerdown',e=>{ if(cur&&!e.target.closest('.it')){ cur.el.classList.remove('sel'); cur=null; $('sel').classList.add('hide'); } });
-$('pFs').oninput=e=>{ if(cur){ cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
-$('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
+$('pFs').oninput=e=>{ if(cur){ edCommit('fs'+cur.id); cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
+$('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ edCommit('ce'+cur.id); cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
 $('addTxt').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('text'); };
 $('addMono').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('mono'); };
 
@@ -728,8 +741,8 @@ function renderTray(){
     w.firstChild.src=d; w.onclick=e=>{ if(e.target.tagName==='SPAN'){ sigs.splice(i,1); persist(); renderTray(); } else { addItem('sig',d); t.classList.add('hide'); } };
     box.appendChild(w);
   });
-  const b=document.createElement('button'); b.className='t g'; b.style.flex='0 0 auto'; b.textContent='Add new signature'; b.onclick=openPad; box.appendChild(b);
-  const b2=document.createElement('button'); b2.className='t g'; b2.style.flex='0 0 auto'; b2.textContent='Add from image'; b2.onclick=()=>$('sigFile').click(); box.appendChild(b2);
+  const b=document.createElement('button'); b.className='t g'; b.style.flex='0 0 auto'; b.textContent='New signature'; b.onclick=openPad; box.appendChild(b);
+  const b2=document.createElement('button'); b2.className='t g'; b2.style.flex='0 0 auto'; b2.textContent='From image'; b2.onclick=()=>$('sigFile').click(); box.appendChild(b2);
 }
 $('addSig').onclick=()=>{ renderTray(); $('sigTray').classList.toggle('hide'); };
 const pad=$('pad'), pc=pad.getContext('2d'); pad.width=1200; pad.height=400;
@@ -766,14 +779,14 @@ function sync(){
   $('pColor').value=cur.color; $('pFont').value=cur.font;
 }
 const normR=r=>((r+180)%360+360)%360-180;
-const setRot=r=>{ if(cur&&cur.type==='sig'){ cur.rot=normR(r); $('pRot').value=cur.rot; $('pRotV').textContent=cur.rot+'\u00b0'; layout(cur); } };
+const setRot=r=>{ if(cur&&cur.type==='sig'){ edCommit('ro'+cur.id); cur.rot=normR(r); $('pRot').value=cur.rot; $('pRotV').textContent=cur.rot+'\u00b0'; layout(cur); } };
 $('pRot').oninput=e=>setRot(+e.target.value);
 $('pRL').onclick=()=>setRot((cur.rot||0)-90); $('pRR').onclick=()=>setRot((cur.rot||0)+90);
-$('pFont').onchange=e=>{ if(cur){ cur.font=e.target.value; layout(cur); } };
-['B','I','U'].forEach(k=>$('p'+k).onclick=()=>{ if(cur){ const f=k.toLowerCase(); cur[f]=!cur[f]; layout(cur); sync(); } });
-$('pAl').onclick=e=>{ const b=e.target.closest('[data-a]'); if(b&&cur){ cur.align=b.dataset.a; layout(cur); sync(); } };
-$('pColor').oninput=e=>{ if(cur){ cur.color=e.target.value; layout(cur); } };
-function dup(it){
+$('pFont').onchange=e=>{ if(cur){ edCommit(); cur.font=e.target.value; layout(cur); } };
+['B','I','U'].forEach(k=>$('p'+k).onclick=()=>{ if(cur){ edCommit(); const f=k.toLowerCase(); cur[f]=!cur[f]; layout(cur); sync(); } });
+$('pAl').onclick=e=>{ const b=e.target.closest('[data-a]'); if(b&&cur){ edCommit(); cur.align=b.dataset.a; layout(cur); sync(); } };
+$('pColor').oninput=e=>{ if(cur){ edCommit('co'+cur.id); cur.color=e.target.value; layout(cur); } };
+function dup(it){ edCommit();
   const c=Object.assign({},it); delete c.el; delete c.inp;
   c.x=clamp(it.x+12,0,Math.max(0,it.p.wpt-it.w)); c.y=clamp(it.y+12,0,Math.max(0,it.p.hpt-it.h));
   build(c); if(c.inp){ c.inp.value=c.text; if(c.cells) c.inp.maxLength=c.cells; }
@@ -819,13 +832,13 @@ async function buildEdited(src){
   return doc.save();
 }
 $('eSave').onclick=async()=>{
-  if(!items.length){ $('enote').textContent='Add a signature or text box first.'; return; }
+  if(!items.length&&!dirty){ $('enote').textContent='Nothing to save yet. Add a signature or text box first.'; return; }
   $('enote').textContent='Preparing…';
-  try{ const b=await buildEdited(); if(await saveBytes(b,state.name.replace(/\.pdf$/i,'')+'-edited.pdf',$('enote'))) dirty=false; }
+  try{ const b=await buildEdited(); if(await saveBytes(b,state.name.replace(/\.pdf$/i,'')+'-edited.pdf',$('enote'))){ dirty=false; edStatus(); } }
   catch(e){ $('enote').textContent='Couldn’t build the PDF: '+(e.message||e); }
 };
 $('eCompress').onclick=async()=>{
-  try{ const had=items.length; const b=had?await buildEdited():state.bytes; await load(new File([b],state.name,{type:'application/pdf'})); if(had) dirty=true; show('c'); }
+  try{ const had=items.length; const b=had?await buildEdited():state.bytes; if(had) histPush(); await load(new File([b],state.name,{type:'application/pdf'})); if(had) dirty=true; show('c'); }
   catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
 };
 
@@ -1214,7 +1227,7 @@ async function elFonts(){
       };
       box.appendChild(row);
     });
-  }catch(e){ banner('Could not scan fonts: '+(e.message||e),'elnote'); box.innerHTML='<p class="warn">Couldn\u2019t scan fonts: '+(e.message||e)+'</p>'; }
+  }catch(e){ banner('Could not scan fonts: '+(e.message||e),'elnote'); box.innerHTML='<p class="err">Couldn\u2019t scan fonts: '+(e.message||e)+'</p>'; }
 }
 
 /* ---------- Session safety ---------- */
@@ -1226,7 +1239,7 @@ const idb={
   del(k){ return this.run('readwrite',o=>o.delete(k)); }
 };
 let tT=null;
-function touch(){
+function touch(){ edStatus();
   if(restoring) return; clearTimeout(tT);
   tT=setTimeout(()=>{ if(!state.bytes) return;
     idb.set('items',items.map(it=>({type:it.type,n:it.p.n,x:it.x,y:it.y,w:it.w,h:it.h,text:it.text,fs:it.fs,cells:it.cells,font:it.font,b:it.b,i:it.i,u:it.u,color:it.color,align:it.align,sig:it.sig,rot:it.rot}))).catch(()=>{});
@@ -1378,7 +1391,7 @@ async function orgApply(){
       let pg=bp; if(used.has(bp)){ const leaf=bp.node.clone(); pg=PDFLib.PDFPage.of(leaf,out.context.register(leaf),out); } else used.add(bp);
       out.addPage(pg); pg.setRotation(PDFLib.degrees((r0.get(bp)+(e.rot||0))%360));
     });
-    const bytes=await out.save();
+    const bytes=await out.save(); histPush();
     await load(new File([bytes],state.name,{type:'application/pdf'}));
     show('o'); dirty=true; return true;
   }catch(err){ $('onote').textContent='Couldn\u2019t build the PDF: '+(err.message||err)+(/encrypt/i.test(err.message||'')?' (password-protected files can\u2019t be merged)':''); return false; }
@@ -1650,14 +1663,14 @@ function elSec(k){
 function elRender(){
   const k=EL.sec, tot=pdfDoc?pdfDoc.numPages:1; EL.page=Math.min(Math.max(1,EL.page),tot); $('eLbl').textContent=`${EL.page}/${tot}`;
   const host=$('e-'+k), sc=document.scrollingElement||document.documentElement, y=sc.scrollTop; host.style.minHeight=host.offsetHeight+'px';
-  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); banner(m,'elnote'); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="warn">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
+  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); banner(m,'elnote'); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="err">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
 }
 $('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
 $('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
 $('elType').onchange=()=>{ if(EL) elSec($('elType').value); };
 const elH={u:[],r:[]};
-function elHistBtns(){ $('elUndo').disabled=!elH.u.length; $('elRedo').disabled=!elH.r.length; $('elUc').textContent=elH.u.length||''; $('elRc').textContent=elH.r.length||''; }
-async function elGoto(bytes){ if(EL){ elKeep=EL.sec; elKeepPage=EL.page; } await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); }
+function elHistBtns(){ const u=elH.u.length, r=elH.r.length; ['el','e'].forEach(p=>{ $(p+'Undo').disabled=!u; $(p+'Redo').disabled=!r; $(p+'Uc').textContent=u||''; $(p+'Rc').textContent=r||''; }); edStatus(); }
+/* unified undo stack */
 async function elApply(fn){
   if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
   $('elnote').textContent='Applying\u2026'; await tick();
@@ -1665,12 +1678,40 @@ async function elApply(fn){
     const base0=items.length?await buildEdited():state.bytes, prev=state.bytes;
     const doc=await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false});
     await fn(doc); const bytes=await doc.save();
-    elH.u.push(prev); if(elH.u.length>10) elH.u.shift(); elH.r.length=0;
+    elH.u.push({b:prev,it:serItems()}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0;
     await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); dirty=true; $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
   }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); return false; }
 }
-$('elUndo').onclick=async()=>{ if(!elH.u.length) return; elH.r.push(state.bytes); if(elH.r.length>10) elH.r.shift(); await elGoto(elH.u.pop()); $('elnote').textContent='Undone.'; };
-$('elRedo').onclick=async()=>{ if(!elH.r.length) return; elH.u.push(state.bytes); if(elH.u.length>10) elH.u.shift(); await elGoto(elH.r.pop()); $('elnote').textContent='Redone.'; };
+const serItems=()=>items.map(it=>({type:it.type,n:it.p.n,x:it.x,y:it.y,w:it.w,h:it.h,text:it.text,fs:it.fs,cells:it.cells,font:it.font,b:it.b,i:it.i,u:it.u,color:it.color,align:it.align,sig:it.sig,rot:it.rot}));
+function histPush(){ elH.u.push({b:state.bytes,it:serItems()}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; elHistBtns(); }
+function edCommit(k){ const n=Date.now(); if(k&&k===ckKey&&n-ckT<1000){ ckT=n; return; } ckKey=k||''; ckT=n; histPush(); }
+function edStatus(){
+  const e=$('eStat'); if(!e) return; const n=items.length; let t='',c='';
+  if(n){ t=`${n} item${n>1?'s':''} on the pages, not applied to the PDF yet`; c=' t-warn'; }
+  else if(dirty){ t='Changes applied to the PDF in memory, not saved to a file'; c=' t-info'; }
+  else if(state.bytes) t='No unsaved changes';
+  e.textContent=t; e.className='note'+c;
+}
+async function restoreState(st){
+  const v=curV; if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
+  if(st.b!==state.bytes) await load(new File([st.b],state.name,{type:'application/pdf'}));
+  else { items.forEach(i=>i.el.remove()); items=[]; cur=null; $('sel').classList.add('hide'); }
+  restoreItems(st.it); ckKey=''; dirty=true; show(v);
+}
+const histMsg=m=>{ $(curV==='e'?'enote':'elnote').textContent=m; };
+async function histUndo(){ if(histBusy||!elH.u.length) return; histBusy=true; try{ elH.r.push({b:state.bytes,it:serItems()}); if(elH.r.length>30) elH.r.shift(); await restoreState(elH.u.pop()); histMsg('Undone.'); }catch(e){ histMsg('Failed: '+(e.message||e)); } finally{ histBusy=false; elHistBtns(); } }
+async function histRedo(){ if(histBusy||!elH.r.length) return; histBusy=true; try{ elH.u.push({b:state.bytes,it:serItems()}); if(elH.u.length>30) elH.u.shift(); await restoreState(elH.r.pop()); histMsg('Redone.'); }catch(e){ histMsg('Failed: '+(e.message||e)); } finally{ histBusy=false; elHistBtns(); } }
+async function edApply(){
+  const n=items.length; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
+  $('enote').textContent='Applying\u2026'; await tick();
+  try{
+    const prev={b:state.bytes,it:serItems()}, bytes=await buildEdited();
+    await load(new File([bytes],state.name,{type:'application/pdf'}));
+    elH.u.push(prev); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; dirty=true; ckKey='';
+    show('e'); $('enote').textContent=`Applied ${n} item${n>1?'s':''} to the PDF in memory. Not saved to a file yet.`;
+  }catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
+}
+$('elUndo').onclick=$('eUndo').onclick=histUndo; $('elRedo').onclick=$('eRedo').onclick=histRedo; $('eApply').onclick=edApply;
 const esc=t=>String(t).replace(/[<>&"]/g,'');
 const rowHtml=(th,info,btns)=>`<div class="xth">${th}</div><div class="xinfo">${info}</div><div class="eb">${btns}</div>`;
 
@@ -1967,7 +2008,7 @@ dz.onclick = () => $('file').click();
 $('go').onclick = run;
 $('save').onclick = save;
 function resetAll(){
-  state.out=null; state.outSaved=false; state.bytes=null; dirty=false; items=[]; cur=null; $('pages').innerHTML=''; $('rnote').textContent=''; elH.u.length=elH.r.length=0; $('file').value='';
+  state.out=null; state.outSaved=false; state.bytes=null; dirty=false; items=[]; cur=null; $('pages').innerHTML=''; $('rnote').textContent=''; elH.u.length=elH.r.length=0; elHistBtns(); $('file').value='';
   idb.del('file').catch(()=>{}); idb.del('items').catch(()=>{});
   ['tabs','editor','panel','result','orgp','elp','prog'].forEach(i=>$(i).classList.add('hide')); $('newFile').classList.add('hide'); banner(''); $('drop').classList.remove('hide');
 }
