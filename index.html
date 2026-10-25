@@ -292,6 +292,15 @@ const WARNRE=/lacks some characters|If nothing happened|^(No (valid|images|selec
 const level=t=>ERRRE.test(t)?'err':WARNRE.test(t)?'warn':'info';
 ['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const el=$(id), t=el.textContent.trim(); if(!t) return; const lv=level(t); el.classList.remove('t-err','t-warn','t-info'); el.classList.add('t-'+lv); if(lv==='err'||(lv==='warn'&&!/If nothing happened/.test(t))) banner(t,id,lv); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
 let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false, lastDesc='';
+let keepProducer=false; try{ keepProducer=localStorage.getItem('pdftk_keepprod')==='1'; }catch(e){}
+const PRODUCER="Francine's Tools", stamped=new WeakSet();
+function inheritProducer(out,src){ const pr=src.getProducer(); if(pr) out.setProducer(pr); else { const inf=out.context.lookupMaybe(out.context.trailerInfo.Info,PDFDict); if(inf) inf.delete(N('Producer')); } }
+function copyProducer(out,src){ if(keepProducer) inheritProducer(out,src); else out.setProducer(PRODUCER); }
+async function stampProducer(b){
+  if(keepProducer||stamped.has(b)) return b;
+  const d=await PDFDocument.load(b,{ignoreEncryption:true,updateMetadata:false});
+  d.setProducer(PRODUCER); const o=await d.save(); stamped.add(o); return o;
+}
 let rqN=0, orgP=null; const rtrack=async f=>{ rqN++; try{ return await f(); } finally{ rqN--; } };
 const pending=()=>dirty||!!(state.out&&!state.outSaved)||orgChanged();
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
@@ -595,7 +604,7 @@ async function run(){
   } finally { stop(); }
 }
 
-async function saveBytes(out,name,note){ await saveBytes0(out,name,note); return /^(Saved|Shared|Download started)/.test(note.textContent); }
+async function saveBytes(out,name,note){ if(/\.pdf$/i.test(name)){ try{ note.textContent='Preparing\u2026'; out=await stampProducer(out); }catch(e){} } await saveBytes0(out,name,note); return /^(Saved|Shared|Download started)/.test(note.textContent); }
 async function saveBytes0(out, name, note){
   note.textContent = '';
   try{
@@ -960,7 +969,7 @@ async function pageImages(n){
   return {page,imgs,boxes};
 }
 /* pages */
-async function pagePdf(src,idx){ const out=await PDFDocument.create(); (await out.copyPages(src,idx.map(i=>i-1))).forEach(p=>out.addPage(p)); return out.save(); }
+async function pagePdf(src,idx){ const out=await PDFDocument.create(); (await out.copyPages(src,idx.map(i=>i-1))).forEach(p=>out.addPage(p)); copyProducer(out,src); const b=await out.save(); stamped.add(b); return b; }
 $('pgOne').onclick=async()=>{
   try{ const src=await getXDoc(), idx=ranges($('pgRange').value,src.getPageCount()); if(!idx.length){ $('onote').textContent='No valid pages in that range.'; return; }
     $('onote').textContent='Working\u2026'; await saveBytes(await pagePdf(src,idx),`${base()}-pages.pdf`,$('onote')); }catch(e){ $('onote').textContent='Failed: '+(e.message||e); }
@@ -1383,7 +1392,7 @@ async function orgApply(){
     $('onote').textContent='Building\u2026'; await tick();
     const base0=items.length?await buildEdited():state.bytes, docs=[await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false})];
     for(let k=1;k<o.src.length;k++) docs.push(await PDFDocument.load(o.src[k].bytes,{updateMetadata:false}));
-    const out=await PDFDocument.create(), need=docs.map(()=>new Set()), map=docs.map(()=>new Map());
+    const out=await PDFDocument.create(), need=docs.map(()=>new Set()), map=docs.map(()=>new Map()); inheritProducer(out,docs[0]);
     o.pages.forEach(e=>{ if(!e.blank) need[e.s].add(e.i); });
     for(let k=0;k<docs.length;k++){ const idx=[...need[k]].sort((a,b)=>a-b); if(!idx.length) continue; const cps=await out.copyPages(docs[k],idx); idx.forEach((ix,j)=>map[k].set(ix,cps[j])); }
     const used=new Set(), r0=new Map();
@@ -1905,11 +1914,14 @@ async function elMarks(){
 /* info + javascript */
 async function elInfo(){
   const box=$('e-inf'), d=await EL.p, keys=['Title','Author','Subject','Keywords','Creator','Producer','CreationDate','ModDate'];
-  box.innerHTML=keys.map(k=>`<label class="muted" style="display:block;margin-bottom:8px">${k}<input class="xin" data-k="${k}" style="margin:4px 0 0"></label>`).join('')+
+  box.innerHTML=keys.map(k=>`<label class="muted" style="display:block;margin-bottom:8px">${k}<input class="xin" data-k="${k}" style="margin:4px 0 0"></label>`+(k==='Producer'?`<label class="muted"><input type="checkbox" id="keepProd"> Keep Producer unmodified</label><p class="note" id="prodNote" style="margin:0 0 10px"></p>`:'')).join('')+
     `<label class="muted" style="display:block;margin-bottom:10px"><input type="checkbox" id="infX" ${d.xmp?'checked':''}> Also remove XMP metadata${d.xmp?'':' (none present)'}</label>
      <div class="tools"><button class="t" id="infSave">Apply</button><button class="t g" id="infWipe">Strip all metadata</button></div>
      <p class="muted" style="margin:14px 0 6px">JavaScript: ${d.js?d.js+' place'+(d.js>1?'s':'')+' found':'none found'}</p><button class="t g" id="jsDel" ${d.js?'':'disabled'}>Remove all JavaScript</button>`;
   box.querySelectorAll('[data-k]').forEach(i=>i.value=d.info[i.dataset.k]||'');
+  { const kp=$('keepProd'), pin=box.querySelector('[data-k="Producer"]'); kp.checked=keepProducer;
+    const upd=()=>{ pin.disabled=!kp.checked; $('prodNote').textContent=kp.checked?'The Producer above is kept as it is when you save a PDF.':'Saved PDFs get the Producer \u201cFrancine\u2019s Tools\u201d. Tick the box to keep the Producer above (and edit it).'; };
+    kp.onchange=()=>{ keepProducer=kp.checked; try{ localStorage.setItem('pdftk_keepprod',keepProducer?'1':'0'); }catch(e){} upd(); }; upd(); }
   $('infSave').onclick=()=>{ const v={}; box.querySelectorAll('[data-k]').forEach(i=>v[i.dataset.k]=i.value.trim()); elApply(d2=>opSetInfo(d2,v,$('infX').checked)); };
   $('infWipe').onclick=()=>{ const v={}; keys.forEach(k=>v[k]=''); elApply(d2=>opSetInfo(d2,v,true)); };
   $('jsDel').onclick=()=>elApply(d2=>opStripJs(d2));
