@@ -141,7 +141,7 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 .ib i{font-style:normal;position:absolute;right:2px;bottom:0;font-size:.6rem;font-weight:700}
 
 /* touch targets, theme, errors, new-file */
-#pages{overflow-anchor:none}
+#pages,#oGrid{overflow-anchor:none}
 :root{--warnbg:#fff4e0;--warntext:#5a3600}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--warnbg:#3a2d12;--warntext:#ffe2a8}}
 :root[data-theme="dark"]{--warnbg:#3a2d12;--warntext:#ffe2a8}
@@ -239,10 +239,10 @@ button.danger{background:var(--danger);color:var(--ondanger)}
 </div>
 
 <div id="orgp" class="hide">
-<div class="stick"><div class="tools"><button class="t" id="oAdd">Add PDFs</button><button class="t g" id="oBlank">Add blank page</button><button class="t g" id="oUndo">Undo</button></div>
-<div class="tools"><button class="t" id="oApply">Apply</button><button class="t g" id="oSave">Apply &amp; save</button></div>
+<div class="stick"><div class="tools"><button class="t" id="oAdd">Add PDFs</button><button class="t g" id="oBlank">Add blank page</button></div>
+<div class="tools"><button class="t g ib" id="oUndo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><i id="oUc"></i></button><button class="t g ib" id="oRedo" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg><i id="oRc"></i></button><button class="t" id="oApply">Apply</button><button class="t g" id="oSave">Apply &amp; save</button></div>
 <div id="oMove" class="hide"><div class="tools"><span class="muted">Move page <b id="oSelN"></b> to</span><input type="number" id="oTo" min="1" style="width:64px"><button class="t g" id="oGo" style="flex:0 0 auto;width:auto;padding:8px 14px">Move</button></div></div>
-<p class="note" id="onote"></p></div>
+<p class="note" id="oStat"></p><p class="note" id="onote"></p></div>
 <p class="note" id="oinfo"></p>
 <div class="card"><b>Extract pages</b><p class="note" style="margin:4px 0 8px">Creates files from the current document (tap Apply first if you changed the page order).</p><input class="xin" id="pgRange" placeholder="Pages, e.g. 1-3, 5, 8- (empty = all)"><div class="tools"><button class="t" id="pgOne">Extract as one PDF</button><button class="t g" id="pgZip">Extract each page (ZIP)</button></div></div>
 <div id="oGrid" class="og"></div>
@@ -292,8 +292,8 @@ const WARNRE=/lacks some characters|If nothing happened|^(No (valid|images|selec
 const level=t=>ERRRE.test(t)?'err':WARNRE.test(t)?'warn':'info';
 ['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const el=$(id), t=el.textContent.trim(); if(!t) return; const lv=level(t); el.classList.remove('t-err','t-warn','t-info'); el.classList.add('t-'+lv); if(lv==='err'||(lv==='warn'&&!/If nothing happened/.test(t))) banner(t,id,lv); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
 let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false, lastDesc='';
-let rqN=0; const rtrack=async f=>{ rqN++; try{ return await f(); } finally{ rqN--; } };
-const pending=()=>dirty||!!(state.out&&!state.outSaved)||!!(org&&org.undo.length);
+let rqN=0, orgP=null; const rtrack=async f=>{ rqN++; try{ return await f(); } finally{ rqN--; } };
+const pending=()=>dirty||!!(state.out&&!state.outSaved)||orgChanged();
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
 function silence(){
   const n=8000, b=new Uint8Array(44+n), v=new DataView(b.buffer), w=(o,s)=>[...s].forEach((c,i)=>b[o+i]=c.charCodeAt(0));
@@ -626,8 +626,8 @@ const save = async () => { if(await saveBytes(state.out, state.name.replace(/\.p
 function show(v){ curV=v;
   ['panel','prog','result','editor','orgp','elp'].forEach(i=>$(i).classList.add('hide'));
   $(v==='e'?'editor':v==='o'?'orgp':v==='l'?'elp':'panel').classList.remove('hide');
-  if(v==='l') elInit(); if(v==='e') elHistBtns();
-  if(v==='o'&&!org) initOrg();
+  if(v==='l') elInit(); if(v==='e'||v==='o') elHistBtns();
+  if(v==='o'&&!org) orgP=initOrg();
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('sel',t.dataset.v===v));
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.v));
@@ -1337,33 +1337,33 @@ function ordUpd(){
   $('oinfo').textContent=`${n} page${n===1?'':'s'}. Tap a page to select it. Arrows reorder, the other buttons rotate, duplicate or delete. Add PDFs appends pages at the end.`;
   $('oMove').classList.toggle('hide',org.sel<0);
   if(org.sel>=0){ $('oSelN').textContent=org.sel+1; $('oTo').value=org.sel+1; $('oTo').max=n; }
-  $('oUndo').disabled=!org.undo.length; $('oApply').disabled=$('oSave').disabled=!n;
+  $('oApply').disabled=$('oSave').disabled=!n; edStatus();
 }
-const snap=()=>{ org.undo.push(org.pages.slice()); if(org.undo.length>40) org.undo.shift(); };
+const snap=d=>histPush(d,'o');
 $('oGrid').onclick=e=>{
   if(!org) return; const c=e.target.closest('.oc'); if(!c) return;
   const k=[...c.parentNode.children].indexOf(c), b=e.target.closest('button[data-a]');
   if(b){
     const a=b.dataset.a;
-    if(a==='x'){ snap(); org.pages.splice(k,1); org.sel=-1; }
-    else if(a==='rot'){ snap(); const e0=org.pages[k]; org.pages[k]={...e0,rot:((e0.rot||0)+90)%360,w:e0.h,h:e0.w,cv:null}; }
-    else if(a==='dup'){ snap(); org.pages.splice(k+1,0,{...org.pages[k],cv:null}); org.sel=k+1; }
-    else{ const j=k+(a==='l'?-1:1); if(j<0||j>=org.pages.length) return; snap(); [org.pages[k],org.pages[j]]=[org.pages[j],org.pages[k]]; if(org.sel===k) org.sel=j; else if(org.sel===j) org.sel=k; }
+    if(a==='x'){ snap('Deleted page '+(k+1)); org.pages.splice(k,1); org.sel=-1; }
+    else if(a==='rot'){ snap('Rotated page '+(k+1)); const e0=org.pages[k]; org.pages[k]={...e0,rot:((e0.rot||0)+90)%360,w:e0.h,h:e0.w,cv:null}; }
+    else if(a==='dup'){ snap('Duplicated page '+(k+1)); org.pages.splice(k+1,0,{...org.pages[k],cv:null}); org.sel=k+1; }
+    else{ const j=k+(a==='l'?-1:1); if(j<0||j>=org.pages.length) return; snap('Moved page '+(k+1)+(a==='l'?' earlier':' later')); [org.pages[k],org.pages[j]]=[org.pages[j],org.pages[k]]; if(org.sel===k) org.sel=j; else if(org.sel===j) org.sel=k; }
   } else org.sel=org.sel===k?-1:k;
   drawGrid(); ordUpd();
 };
 $('oGo').onclick=()=>{
   if(!org||org.sel<0) return; const to=clamp(parseInt($('oTo').value)||1,1,org.pages.length)-1; if(to===org.sel) return;
-  snap(); const [e]=org.pages.splice(org.sel,1); org.pages.splice(to,0,e); org.sel=to; drawGrid(); ordUpd();
+  snap('Moved page '+(org.sel+1)+' to position '+(to+1)); const [e]=org.pages.splice(org.sel,1); org.pages.splice(to,0,e); org.sel=to; drawGrid(); ordUpd();
 };
 $('oBlank').onclick=()=>{
-  if(!org) return; snap(); const k=org.sel>=0?org.sel:org.pages.length-1, ref=org.pages[k]||{w:595,h:842};
+  if(!org) return; snap('Added a blank page'); const k=org.sel>=0?org.sel:org.pages.length-1, ref=org.pages[k]||{w:595,h:842};
   org.pages.splice(k+1,0,{blank:1,s:0,i:-1,w:ref.w,h:ref.h}); org.sel=k+1; drawGrid(); ordUpd();
 };
-$('oUndo').onclick=()=>{ if(org&&org.undo.length){ org.pages=org.undo.pop(); org.sel=-1; drawGrid(); ordUpd(); } };
+$('oUndo').onclick=histUndo; $('oRedo').onclick=histRedo;
 $('oAdd').onclick=()=>$('oFile').click();
 $('oFile').onchange=async e=>{
-  const files=[...e.target.files]; e.target.value=''; if(!org||!files.length) return; const o=org; snap(); $('onote').textContent='Adding\u2026';
+  const files=[...e.target.files]; e.target.value=''; if(!org||!files.length) return; const o=org; snap('Added pages from PDF file(s)'); $('onote').textContent='Adding\u2026';
   for(const f of files){
     try{
       if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf') throw new Error('not a PDF');
@@ -1378,7 +1378,7 @@ $('oFile').onchange=async e=>{
   if(org===o){ drawGrid(); ordUpd(); }
 };
 async function orgApply(){
-  const o=org; if(!o||!o.pages.length) return false;
+  const o=org; if(!o||!o.pages.length) return false; const sc=document.scrollingElement||document.documentElement, y0=sc.scrollTop;
   try{
     $('onote').textContent='Building\u2026'; await tick();
     const base0=items.length?await buildEdited():state.bytes, docs=[await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false})];
@@ -1395,7 +1395,7 @@ async function orgApply(){
     });
     const bytes=await out.save(); histPush('Applied page changes (order, merge, rotate, duplicate, delete or blank pages)','o');
     await load(new File([bytes],state.name,{type:'application/pdf'}));
-    show('o'); dirty=true; return true;
+    show('o'); await orgP; sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; }); }); dirty=true; return true;
   }catch(err){ $('onote').textContent='Couldn\u2019t build the PDF: '+(err.message||err)+(/encrypt/i.test(err.message||'')?' (password-protected files can\u2019t be merged)':''); return false; }
 }
 $('oApply').onclick=async()=>{ if(await orgApply()) $('onote').textContent='Applied. The other tabs now use the new document.'; };
@@ -1671,7 +1671,7 @@ $('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
 $('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
 $('elType').onchange=()=>{ if(EL) elSec($('elType').value); };
 const elH={u:[],r:[]};
-function elHistBtns(){ const u=elH.u.length, r=elH.r.length; ['el','e'].forEach(p=>{ $(p+'Undo').disabled=!u||histBusy; $(p+'Redo').disabled=!r||histBusy; $(p+'Uc').textContent=u||''; $(p+'Rc').textContent=r||''; }); edStatus(); }
+function elHistBtns(){ const u=elH.u.length, r=elH.r.length; ['el','e','o'].forEach(p=>{ $(p+'Undo').disabled=!u||histBusy; $(p+'Redo').disabled=!r||histBusy; $(p+'Uc').textContent=u||''; $(p+'Rc').textContent=r||''; }); edStatus(); }
 /* unified undo stack */
 async function elApply(fn){
   if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
@@ -1680,14 +1680,21 @@ async function elApply(fn){
     const base0=items.length?await buildEdited():state.bytes, prev=state.bytes;
     const doc=await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false});
     await fn(doc); const bytes=await doc.save();
-    elH.u.push({b:prev,it:serItems(),d:lastDesc||elDefDesc(),v:'l',s:elKeep,pg:elKeepPage}); lastDesc=''; if(elH.u.length>30) elH.u.shift(); elH.r.length=0;
+    elH.u.push({b:prev,it:serItems(),o:orgSnap(),d:lastDesc||elDefDesc(),v:'l',s:elKeep,pg:elKeepPage}); lastDesc=''; if(elH.u.length>30) elH.u.shift(); elH.r.length=0;
     await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); dirty=true; $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
   }catch(e){ lastDesc=''; $('elnote').textContent='Failed: '+(e.message||e); return false; }
 }
 const serItems=()=>items.map(it=>({type:it.type,n:it.p.n,x:it.x,y:it.y,w:it.w,h:it.h,text:it.text,fs:it.fs,cells:it.cells,font:it.font,b:it.b,i:it.i,u:it.u,color:it.color,align:it.align,sig:it.sig,rot:it.rot}));
-function histPush(d,v,pg,s){ elH.u.push({b:state.bytes,it:serItems(),d:d||'Change',v:v||curV,pg,s}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; elHistBtns(); }
+function histPush(d,v,pg,s){ elH.u.push({b:state.bytes,it:serItems(),o:orgSnap(),d:d||'Change',v:v||curV,pg,s}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; elHistBtns(); }
 function edCommit(k,d,pg){ const n=Date.now(); if(k&&k===ckKey&&n-ckT<1000){ ckT=n; return; } ckKey=k||''; ckT=n; histPush(d,'e',pg); }
 const itemName=it=>({sig:'signature',text:'text box',mono:'mono box'})[it.type]||'item';
+const orgSnap=()=>org?{pages:org.pages.slice(),src:org.src.slice(),sel:org.sel}:null;
+const orgChanged=()=>!!(org&&pdfDoc&&(org.pages.length!==pdfDoc.numPages||org.pages.some((e,k)=>e.blank||e.s!==0||e.i!==k||e.rot)));
+async function restoreOrg(o){
+  if(!o){ if(org){ org.io.disconnect(); org=null; $('oGrid').innerHTML=''; } return; }
+  if(!org){ await initOrg(); if(!org) return; }
+  org.src=[org.src[0],...o.src.slice(1)]; org.pages=o.pages.map(e=>({...e})); org.sel=o.sel; drawGrid(); ordUpd();
+}
 const edCur=(k,d)=>edCommit(k,d+' ('+itemName(cur)+', page '+cur.p.n+')',cur.p.n);
 const elDefDesc=()=>'Changed '+({img:'images',ann:'annotations',att:'attached files',bm:'bookmarks',inf:'document info',txt:'text',fnt:'fonts',cap:'capture'})[elKeep]+(['img','ann','txt'].includes(elKeep)?' on page '+elKeepPage:'');
 function edStatus(){
@@ -1696,12 +1703,13 @@ function edStatus(){
   else if(dirty){ t='Changes applied to the PDF in memory, not saved to a file'; c=' t-info'; }
   else if(state.bytes) t='No unsaved changes';
   e.textContent=t; e.className='note'+c;
+  const q=$('oStat'); if(q){ let t2='',c2=''; if(orgChanged()){ t2='Page changes not applied to the PDF yet'; c2=' t-warn'; } else if(dirty){ t2='Changes applied to the PDF in memory, not saved to a file'; c2=' t-info'; } else if(state.bytes) t2='No unsaved changes'; q.textContent=t2; q.className='note'+c2; }
 }
 async function restoreState(st){
   const v=curV; if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
   if(st.b!==state.bytes) await load(new File([st.b],state.name,{type:'application/pdf'}));
   else { items.forEach(i=>i.el.remove()); items=[]; cur=null; $('sel').classList.add('hide'); }
-  restoreItems(st.it); ckKey=''; dirty=true; show(v);
+  restoreItems(st.it); await restoreOrg(st.o); ckKey=''; dirty=true; show(v);
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const histMsg=m=>{ $(curV==='e'?'enote':curV==='o'?'onote':'elnote').textContent=m; };
@@ -1711,7 +1719,7 @@ function histGo(m){
   if(v==='l'){ if(EL){ if(m.s) EL.sec=m.s; if(m.pg) EL.page=m.pg; } else { elKeep=m.s||'img'; elKeepPage=m.pg||1; } }
   show(v); edScroll(m);
 }
-async function waitRender(){ await sleep(150); const t0=Date.now(); while(rqN>0&&Date.now()-t0<10000) await sleep(50); await sleep(500); }
+async function waitRender(){ await sleep(150); if(curV==='o'&&orgP) await orgP.catch(()=>{}); const t0=Date.now(); while(rqN>0&&Date.now()-t0<10000) await sleep(50); await sleep(500); }
 async function histStep(from,to,ing,done){
   if(histBusy||!from.length) return; histBusy=true; elHistBtns();
   const st=from.pop(), d=st.d||'Change';
@@ -1719,7 +1727,7 @@ async function histStep(from,to,ing,done){
     histGo(st);
     toast(`${ing}: ${d}. Showing the current state first\u2026`,10000);
     await waitRender();
-    const now={b:state.bytes,it:serItems(),d:st.d,v:st.v,s:st.s,pg:st.pg};
+    const now={b:state.bytes,it:serItems(),o:orgSnap(),d:st.d,v:st.v,s:st.s,pg:st.pg};
     await restoreState(st); edScroll(st);
     to.push(now); if(to.length>30) to.shift();
     histMsg(`${done}: ${d}.`); toast(`${done}: ${d}`,5000);
@@ -1731,7 +1739,7 @@ async function edApply(){
   const n=items.length, sc=document.scrollingElement||document.documentElement, y0=sc.scrollTop; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
   $('enote').textContent='Applying\u2026'; await tick();
   try{
-    const prev={b:state.bytes,it:serItems(),d:`Applied ${n} item${n>1?'s':''} to the PDF`,v:'e',pg:items[0].p.n}, bytes=await buildEdited();
+    const prev={b:state.bytes,it:serItems(),o:orgSnap(),d:`Applied ${n} item${n>1?'s':''} to the PDF`,v:'e',pg:items[0].p.n}, bytes=await buildEdited();
     await load(new File([bytes],state.name,{type:'application/pdf'}));
     elH.u.push(prev); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; dirty=true; ckKey='';
     show('e'); sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; requestAnimationFrame(()=>{ sc.scrollTop=y0; }); }); $('enote').textContent=`Applied ${n} item${n>1?'s':''} to the PDF in memory. Not saved to a file yet.`;
