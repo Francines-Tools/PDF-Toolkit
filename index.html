@@ -290,7 +290,7 @@ const ERRRE=/^(Failed|Couldn|Could not|Compression failed|This (image|font|PDF)|
 const WARNRE=/lacks some characters|If nothing happened|^(No (valid|images|selectable|editable)|Nothing to|Add a |Drag on|Copying is blocked)/;
 const level=t=>ERRRE.test(t)?'err':WARNRE.test(t)?'warn':'info';
 ['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const el=$(id), t=el.textContent.trim(); if(!t) return; const lv=level(t); el.classList.remove('t-err','t-warn','t-info'); el.classList.add('t-'+lv); if(lv==='err'||(lv==='warn'&&!/If nothing happened/.test(t))) banner(t,id,lv); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
-let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false;
+let dirty=false, curV='c', edId=0, ckKey='', ckT=0, histBusy=false, lastDesc='';
 const pending=()=>dirty||!!(state.out&&!state.outSaved)||!!(org&&org.undo.length);
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
 function silence(){
@@ -666,7 +666,7 @@ function addItem(type,sig){
   const place=()=>{
     const r=p.wrap.getBoundingClientRect();
     it.x=clamp((p.wpt-it.w)/2,0,Math.max(0,p.wpt-it.w)); it.y=clamp((innerHeight*.45-r.top)/p.s-it.h/2,0,Math.max(0,p.hpt-it.h));
-    edCommit(); build(it); items.push(it); edStatus(); select(it); if(it.inp) it.inp.focus();
+    edCommit('','Added '+itemName(it)+' on page '+it.p.n,it.p.n); build(it); items.push(it); edStatus(); select(it); if(it.inp) it.inp.focus();
   };
   if(type==='sig'){ const im=new Image(); im.onload=()=>{ it.h=it.w*im.naturalHeight/im.naturalWidth; place(); }; im.src=sig; } else place();
 }
@@ -678,7 +678,7 @@ function build(it){
   else{
     body=document.createElement(it.type==='text'?'textarea':'input'); body.className=it.type==='text'?'tx':'mono'; body.spellcheck=false;
     body.placeholder=it.type==='text'?'Type here…':'ABC'; it.inp=body;
-    body.oninput=()=>{ edCommit('t'+it.id); it.text=body.value; layout(it); };
+    body.oninput=()=>{ edCommit('t'+it.id,'Edited text in '+itemName(it)+' on page '+it.p.n,it.p.n); it.text=body.value; layout(it); };
   }
   el.insertBefore(body,el.querySelector('.rz'));
   el.addEventListener('pointerdown',()=>select(it));
@@ -702,7 +702,7 @@ function drag(h,it,mode){
     e.preventDefault(); e.stopPropagation(); select(it);
     const sx=e.clientX, sy=e.clientY, o={x:it.x,y:it.y,w:it.w,h:it.h}; h.setPointerCapture(e.pointerId);
     const mv=ev=>{
-      const dx=(ev.clientX-sx)/it.p.s, dy=(ev.clientY-sy)/it.p.s; if(!mv.p&&(dx||dy)){ mv.p=1; edCommit(); }
+      const dx=(ev.clientX-sx)/it.p.s, dy=(ev.clientY-sy)/it.p.s; if(!mv.p&&(dx||dy)){ mv.p=1; edCommit('',(mode==='m'?'Moved ':'Resized ')+itemName(it)+' on page '+it.p.n,it.p.n); }
       if(mode==='m'){ it.x=clamp(o.x+dx,0,it.p.wpt-it.w); it.y=clamp(o.y+dy,0,it.p.hpt-it.h); }
       else if(!it.rot){ it.w=clamp(o.w+dx,15,it.p.wpt-it.x); it.h=clamp(o.h+dy,8,it.p.hpt-it.y); }
       else{
@@ -725,10 +725,10 @@ function select(it){
   $('pFs').value=it.fs; $('pCells').value=it.cells||'';
   $('pFont').classList.toggle('hide',it.type!=='text'); $('pAl').classList.toggle('hide',it.type!=='text'); sync();
 }
-function del(it){ edCommit(); it.el.remove(); items=items.filter(i=>i!==it); touch(); dirty=true; if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
+function del(it){ edCommit('','Deleted '+itemName(it)+' on page '+it.p.n,it.p.n); it.el.remove(); items=items.filter(i=>i!==it); touch(); dirty=true; if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
 $('pages').addEventListener('pointerdown',e=>{ if(cur&&!e.target.closest('.it')){ cur.el.classList.remove('sel'); cur=null; $('sel').classList.add('hide'); } });
-$('pFs').oninput=e=>{ if(cur){ edCommit('fs'+cur.id); cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
-$('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ edCommit('ce'+cur.id); cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
+$('pFs').oninput=e=>{ if(cur){ edCur('fs'+cur.id,'Changed font size'); cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
+$('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ edCur('ce'+cur.id,'Changed character cells'); cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
 $('addTxt').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('text'); };
 $('addMono').onclick=()=>{ $('sigTray').classList.add('hide'); addItem('mono'); };
 
@@ -779,14 +779,14 @@ function sync(){
   $('pColor').value=cur.color; $('pFont').value=cur.font;
 }
 const normR=r=>((r+180)%360+360)%360-180;
-const setRot=r=>{ if(cur&&cur.type==='sig'){ edCommit('ro'+cur.id); cur.rot=normR(r); $('pRot').value=cur.rot; $('pRotV').textContent=cur.rot+'\u00b0'; layout(cur); } };
+const setRot=r=>{ if(cur&&cur.type==='sig'){ edCur('ro'+cur.id,'Rotated'); cur.rot=normR(r); $('pRot').value=cur.rot; $('pRotV').textContent=cur.rot+'\u00b0'; layout(cur); } };
 $('pRot').oninput=e=>setRot(+e.target.value);
 $('pRL').onclick=()=>setRot((cur.rot||0)-90); $('pRR').onclick=()=>setRot((cur.rot||0)+90);
-$('pFont').onchange=e=>{ if(cur){ edCommit(); cur.font=e.target.value; layout(cur); } };
-['B','I','U'].forEach(k=>$('p'+k).onclick=()=>{ if(cur){ edCommit(); const f=k.toLowerCase(); cur[f]=!cur[f]; layout(cur); sync(); } });
-$('pAl').onclick=e=>{ const b=e.target.closest('[data-a]'); if(b&&cur){ edCommit(); cur.align=b.dataset.a; layout(cur); sync(); } };
-$('pColor').oninput=e=>{ if(cur){ edCommit('co'+cur.id); cur.color=e.target.value; layout(cur); } };
-function dup(it){ edCommit();
+$('pFont').onchange=e=>{ if(cur){ edCur('','Changed font'); cur.font=e.target.value; layout(cur); } };
+['B','I','U'].forEach(k=>$('p'+k).onclick=()=>{ if(cur){ edCur('','Toggled '+({B:'bold',I:'italic',U:'underline'})[k]); const f=k.toLowerCase(); cur[f]=!cur[f]; layout(cur); sync(); } });
+$('pAl').onclick=e=>{ const b=e.target.closest('[data-a]'); if(b&&cur){ edCur('','Changed alignment'); cur.align=b.dataset.a; layout(cur); sync(); } };
+$('pColor').oninput=e=>{ if(cur){ edCur('co'+cur.id,'Changed colour'); cur.color=e.target.value; layout(cur); } };
+function dup(it){ edCommit('','Duplicated '+itemName(it)+' on page '+it.p.n,it.p.n);
   const c=Object.assign({},it); delete c.el; delete c.inp;
   c.x=clamp(it.x+12,0,Math.max(0,it.p.wpt-it.w)); c.y=clamp(it.y+12,0,Math.max(0,it.p.hpt-it.h));
   build(c); if(c.inp){ c.inp.value=c.text; if(c.cells) c.inp.maxLength=c.cells; }
@@ -838,7 +838,7 @@ $('eSave').onclick=async()=>{
   catch(e){ $('enote').textContent='Couldn’t build the PDF: '+(e.message||e); }
 };
 $('eCompress').onclick=async()=>{
-  try{ const had=items.length; const b=had?await buildEdited():state.bytes; if(had) histPush(); await load(new File([b],state.name,{type:'application/pdf'})); if(had) dirty=true; show('c'); }
+  try{ const had=items.length; const b=had?await buildEdited():state.bytes; if(had) histPush('Applied '+had+' item'+(had>1?'s':'')+' to the PDF','e',items[0]&&items[0].p.n); await load(new File([b],state.name,{type:'application/pdf'})); if(had) dirty=true; show('c'); }
   catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
 };
 
@@ -1268,7 +1268,7 @@ function restoreItems(list){
     };
   }catch(e){}
 })();
-function toast(m){ const t=$('toast'); t.textContent=m; t.classList.remove('hide'); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.add('hide'),3500); }
+function toast(m,ms){ const t=$('toast'); t.textContent=m; t.classList.remove('hide'); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.add('hide'),ms||3500); }
 let gArm=0;
 function guardOn(){ if(guardOn.done) return; guardOn.done=1; try{ history.pushState({g:1},''); }catch(e){} }
 window.addEventListener('popstate',()=>{
@@ -1391,7 +1391,7 @@ async function orgApply(){
       let pg=bp; if(used.has(bp)){ const leaf=bp.node.clone(); pg=PDFLib.PDFPage.of(leaf,out.context.register(leaf),out); } else used.add(bp);
       out.addPage(pg); pg.setRotation(PDFLib.degrees((r0.get(bp)+(e.rot||0))%360));
     });
-    const bytes=await out.save(); histPush();
+    const bytes=await out.save(); histPush('Applied page changes (order, merge, rotate, duplicate, delete or blank pages)','o');
     await load(new File([bytes],state.name,{type:'application/pdf'}));
     show('o'); dirty=true; return true;
   }catch(err){ $('onote').textContent='Couldn\u2019t build the PDF: '+(err.message||err)+(/encrypt/i.test(err.message||'')?' (password-protected files can\u2019t be merged)':''); return false; }
@@ -1607,7 +1607,7 @@ function scanDoc(doc){
   d.xmp=cat.has(N('Metadata'));
   return d;
 }
-function opDelImage(doc,num){
+function opDelImage(doc,num){ lastDesc='Deleted an image';
   const ref=PDFLib.PDFRef.of(num,0), ctx=doc.context;
   ctx.assign(ref,PDFRawStream.of(ctx.obj({Type:'XObject',Subtype:'Image',Width:1,Height:1,ImageMask:true,BitsPerComponent:1}),new Uint8Array([0x80])));
 }
@@ -1624,21 +1624,21 @@ function opDelAnnots(doc,match){
       }
     }
   });
-  return n;
+  lastDesc=`Deleted ${n} annotation${n===1?'':'s'}`; return n;
 }
-function opDelAttachment(doc,n){
+function opDelAttachment(doc,n){ lastDesc='Deleted an attached file';
   const names=doc.catalog.lookupMaybe(N('Names'),PDFDict), ef=names?.lookupMaybe(N('EmbeddedFiles'),PDFDict), list=[]; if(ef) walkTree(ef,list,new Set());
   const e=list[n]; if(e){ e.arr.remove(e.i+1); e.arr.remove(e.i); }
 }
-function opDelAllAttachments(doc){ doc.catalog.lookupMaybe(N('Names'),PDFDict)?.delete(N('EmbeddedFiles')); }
-function opDelBookmarks(doc){ doc.catalog.delete(N('Outlines')); }
-function opStripJs(doc){
+function opDelAllAttachments(doc){ lastDesc='Removed all attached files'; doc.catalog.lookupMaybe(N('Names'),PDFDict)?.delete(N('EmbeddedFiles')); }
+function opDelBookmarks(doc){ lastDesc='Removed all bookmarks'; doc.catalog.delete(N('Outlines')); }
+function opStripJs(doc){ lastDesc='Removed all JavaScript';
   const cat=doc.catalog; cat.lookupMaybe(N('Names'),PDFDict)?.delete(N('JavaScript'));
   if(isJsAction(cat.lookup(N('OpenAction')))) cat.delete(N('OpenAction'));
   cat.delete(N('AA'));
   doc.getPages().forEach(pg=>{ const arr=pg.node.Annots(); if(arr) for(let j=0;j<arr.size();j++){ const a=arr.lookupMaybe(j,PDFDict); if(!a) continue; if(isJsAction(a.lookup(N('A')))) a.delete(N('A')); a.delete(N('AA')); } pg.node.delete(N('AA')); });
 }
-function opSetInfo(doc,vals,dropXmp){
+function opSetInfo(doc,vals,dropXmp){ lastDesc=Object.values(vals).every(v=>!v)?'Stripped all metadata':'Edited document info';
   const ctx=doc.context; let info=ctx.lookupMaybe(ctx.trailerInfo.Info,PDFDict);
   if(!info){ info=ctx.obj({}); ctx.trailerInfo.Info=ctx.register(info); }
   for(const [k,v] of Object.entries(vals)){ if(v===''||v==null) info.delete(N(k)); else info.set(N(k),/Date$/.test(k)?PDFLib.PDFString.of(v):PDFLib.PDFHexString.fromText(v)); }
@@ -1669,7 +1669,7 @@ $('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
 $('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
 $('elType').onchange=()=>{ if(EL) elSec($('elType').value); };
 const elH={u:[],r:[]};
-function elHistBtns(){ const u=elH.u.length, r=elH.r.length; ['el','e'].forEach(p=>{ $(p+'Undo').disabled=!u; $(p+'Redo').disabled=!r; $(p+'Uc').textContent=u||''; $(p+'Rc').textContent=r||''; }); edStatus(); }
+function elHistBtns(){ const u=elH.u.length, r=elH.r.length; ['el','e'].forEach(p=>{ $(p+'Undo').disabled=!u||histBusy; $(p+'Redo').disabled=!r||histBusy; $(p+'Uc').textContent=u||''; $(p+'Rc').textContent=r||''; }); edStatus(); }
 /* unified undo stack */
 async function elApply(fn){
   if(EL){ elKeep=EL.sec; elKeepPage=EL.page; }
@@ -1678,13 +1678,16 @@ async function elApply(fn){
     const base0=items.length?await buildEdited():state.bytes, prev=state.bytes;
     const doc=await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false});
     await fn(doc); const bytes=await doc.save();
-    elH.u.push({b:prev,it:serItems()}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0;
+    elH.u.push({b:prev,it:serItems(),d:lastDesc||elDefDesc(),v:'l',s:elKeep,pg:elKeepPage}); lastDesc=''; if(elH.u.length>30) elH.u.shift(); elH.r.length=0;
     await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); dirty=true; $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
-  }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); return false; }
+  }catch(e){ lastDesc=''; $('elnote').textContent='Failed: '+(e.message||e); return false; }
 }
 const serItems=()=>items.map(it=>({type:it.type,n:it.p.n,x:it.x,y:it.y,w:it.w,h:it.h,text:it.text,fs:it.fs,cells:it.cells,font:it.font,b:it.b,i:it.i,u:it.u,color:it.color,align:it.align,sig:it.sig,rot:it.rot}));
-function histPush(){ elH.u.push({b:state.bytes,it:serItems()}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; elHistBtns(); }
-function edCommit(k){ const n=Date.now(); if(k&&k===ckKey&&n-ckT<1000){ ckT=n; return; } ckKey=k||''; ckT=n; histPush(); }
+function histPush(d,v,pg,s){ elH.u.push({b:state.bytes,it:serItems(),d:d||'Change',v:v||curV,pg,s}); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; elHistBtns(); }
+function edCommit(k,d,pg){ const n=Date.now(); if(k&&k===ckKey&&n-ckT<1000){ ckT=n; return; } ckKey=k||''; ckT=n; histPush(d,'e',pg); }
+const itemName=it=>({sig:'signature',text:'text box',mono:'mono box'})[it.type]||'item';
+const edCur=(k,d)=>edCommit(k,d+' ('+itemName(cur)+', page '+cur.p.n+')',cur.p.n);
+const elDefDesc=()=>'Changed '+({img:'images',ann:'annotations',att:'attached files',bm:'bookmarks',inf:'document info',txt:'text',fnt:'fonts',cap:'capture'})[elKeep]+(['img','ann','txt'].includes(elKeep)?' on page '+elKeepPage:'');
 function edStatus(){
   const e=$('eStat'); if(!e) return; const n=items.length; let t='',c='';
   if(n){ t=`${n} item${n>1?'s':''} on the pages, not applied to the PDF yet`; c=' t-warn'; }
@@ -1698,14 +1701,34 @@ async function restoreState(st){
   else { items.forEach(i=>i.el.remove()); items=[]; cur=null; $('sel').classList.add('hide'); }
   restoreItems(st.it); ckKey=''; dirty=true; show(v);
 }
-const histMsg=m=>{ $(curV==='e'?'enote':'elnote').textContent=m; };
-async function histUndo(){ if(histBusy||!elH.u.length) return; histBusy=true; try{ elH.r.push({b:state.bytes,it:serItems()}); if(elH.r.length>30) elH.r.shift(); await restoreState(elH.u.pop()); histMsg('Undone.'); }catch(e){ histMsg('Failed: '+(e.message||e)); } finally{ histBusy=false; elHistBtns(); } }
-async function histRedo(){ if(histBusy||!elH.r.length) return; histBusy=true; try{ elH.u.push({b:state.bytes,it:serItems()}); if(elH.u.length>30) elH.u.shift(); await restoreState(elH.r.pop()); histMsg('Redone.'); }catch(e){ histMsg('Failed: '+(e.message||e)); } finally{ histBusy=false; elHistBtns(); } }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const histMsg=m=>{ $(curV==='e'?'enote':curV==='o'?'onote':'elnote').textContent=m; };
+function edScroll(st){ if(st.v==='e'&&st.pg&&pgs[st.pg-1]) pgs[st.pg-1].wrap.scrollIntoView({block:'center'}); else if(st.v==='l'||st.v==='o') $(st.v==='l'?'elp':'orgp').scrollIntoView({block:'start'}); }
+function histGo(m){
+  const v=m.v||curV;
+  if(v==='l'){ if(EL){ if(m.s) EL.sec=m.s; if(m.pg) EL.page=m.pg; } else { elKeep=m.s||'img'; elKeepPage=m.pg||1; } }
+  show(v); edScroll(m);
+}
+async function histStep(from,to,ing,done){
+  if(histBusy||!from.length) return; histBusy=true; elHistBtns();
+  const st=from.pop(), d=st.d||'Change';
+  try{
+    histGo(st);
+    toast(`${ing}: ${d}. Showing the current state first\u2026`,2600);
+    await sleep(1400);
+    const now={b:state.bytes,it:serItems(),d:st.d,v:st.v,s:st.s,pg:st.pg};
+    await restoreState(st); edScroll(st);
+    to.push(now); if(to.length>30) to.shift();
+    histMsg(`${done}: ${d}.`); toast(`${done}: ${d}`,5000);
+  }catch(e){ from.push(st); histMsg('Failed: '+(e.message||e)); }
+  finally{ histBusy=false; elHistBtns(); }
+}
+const histUndo=()=>histStep(elH.u,elH.r,'Undoing','Undone'), histRedo=()=>histStep(elH.r,elH.u,'Redoing','Redone');
 async function edApply(){
   const n=items.length; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
   $('enote').textContent='Applying\u2026'; await tick();
   try{
-    const prev={b:state.bytes,it:serItems()}, bytes=await buildEdited();
+    const prev={b:state.bytes,it:serItems(),d:`Applied ${n} item${n>1?'s':''} to the PDF`,v:'e',pg:items[0].p.n}, bytes=await buildEdited();
     await load(new File([bytes],state.name,{type:'application/pdf'}));
     elH.u.push(prev); if(elH.u.length>30) elH.u.shift(); elH.r.length=0; dirty=true; ckKey='';
     show('e'); $('enote').textContent=`Applied ${n} item${n>1?'s':''} to the PDF in memory. Not saved to a file yet.`;
@@ -1785,7 +1808,7 @@ async function elImgs(){
       else if(b.dataset.a==='rep'){ EL.target=im; $('eImgFile').click(); }
       else if(b.dataset.a==='save') imgSave(im,n,i);
       else elApply(async d2=>{
-        const obj=d2.context.lookup(PDFLib.PDFRef.of(im.num,im.gen)); let c=null;
+        lastDesc='Converted an image to grayscale'; const obj=d2.context.lookup(PDFLib.PDFRef.of(im.num,im.gen)); let c=null;
         const r=await extractImg(obj).catch(()=>null);
         if(r&&r.ext!=='jp2'){ const bm=await createImageBitmap(new Blob([r.data],{type:mime('x.'+r.ext)})); c=canvas(bm.width,bm.height); c.getContext('2d').drawImage(bm,0,0); }
         else c=await decodedCanvas(n,im);
@@ -1805,7 +1828,7 @@ async function elImgs(){
 $('eImgFile').onchange=e=>{
   const f=e.target.files[0], im=EL&&EL.target; e.target.value=''; if(!f||!im) return;
   elApply(async d2=>{
-    const bm=await createImageBitmap(f), long=Math.min(2000,Math.max(im.w,im.h,800)), asp=im.w/im.h, w=Math.round(asp>=1?long:long*asp), h=Math.round(asp>=1?long/asp:long);
+    lastDesc='Replaced an image'; const bm=await createImageBitmap(f), long=Math.min(2000,Math.max(im.w,im.h,800)), asp=im.w/im.h, w=Math.round(asp>=1?long:long*asp), h=Math.round(asp>=1?long/asp:long);
     const c=canvas(w,h), x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.imageSmoothingQuality='high';
     const k=Math.min(w/bm.width,h/bm.height), dw=bm.width*k, dh=bm.height*k; x.drawImage(bm,(w-dw)/2,(h-dh)/2,dw,dh);
     const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9)), dd=d2.context.obj({Type:'XObject',Subtype:'Image',Width:w,Height:h,ColorSpace:'DeviceRGB',BitsPerComponent:8,Filter:'DCTDecode'});
@@ -1930,7 +1953,7 @@ function tList(){
 async function tApply(del){
   const jobs=[...T.sel].map(id=>{ const r=T.runs.find(x=>x.id===id), inp=document.querySelector(`#tList input[data-id="${id}"]`); return {id,label:r.label,ids:r.ids,g:r,text:del?'':(inp?inp.value:r.label)}; }).filter(j=>del||j.text!==j.label);
   if(!jobs.length){ $('tNote').textContent='Nothing to change. Edit the text first.'; return; }
-  const n=T.n, fam=$('tFont').value, fit=$('tFit').checked;
+  const n=T.n, fam=$('tFont').value, fit=$('tFit').checked; lastDesc=(del?'Deleted':'Edited')+' text on page '+n;
   await elApply(async doc=>{
     const pg=doc.getPage(n-1), b=pageBytes(pg), ops=parseContent(b), runs=await computeRuns(doc,pg,b,ops);
     const nb=surgery(b,ops,runs.map((r,i)=>({...r,hit:i})),new Set(jobs.flatMap(j=>j.ids)));
