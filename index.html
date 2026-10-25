@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161715" media="(prefers-color-scheme: dark)">
 <title>Local PDF Compressor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -136,15 +139,44 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 .ib{width:36px;height:34px;padding:0!important;flex:0 0 auto!important;display:flex!important;align-items:center;justify-content:center;position:relative}
 .ib svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .ib i{font-style:normal;position:absolute;right:2px;bottom:0;font-size:.6rem;font-weight:700}
+
+/* touch targets, theme, errors, new-file */
+:root{color-scheme:light dark;--danger:#b3261e;--ondanger:#fff;--errbg:#fdecea;--errtext:#5c1410}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--danger:#ff8a80;--ondanger:#3a0d09;--errbg:#3a1b18;--errtext:#ffd9d4}}
+:root[data-theme="dark"]{--danger:#ff8a80;--ondanger:#3a0d09;--errbg:#3a1b18;--errtext:#ffd9d4}
+button,select,input[type=number],input[type=color],input[type=range],.xin{min-height:44px}
+button.t,button.tab,button.tabx,.eb button,.oct button,.xrow button{min-height:44px}
+button.t.f,.ib{width:44px!important;height:44px!important;min-width:44px}
+#pColor{width:44px;height:44px}
+input[type=checkbox]{width:24px;height:24px;flex:0 0 auto}
+label:has(>input[type=checkbox]){display:flex!important;align-items:center;gap:8px;min-height:44px}
+.ctl{gap:6px}
+.ctl span{width:44px;height:44px}
+.rz{width:44px;height:44px;right:-22px;bottom:-22px;background:transparent;border:0;border-radius:0}
+.rz::after{content:"";position:absolute;left:11px;top:11px;width:22px;height:22px;box-sizing:border-box;background:#2f6f4f;border:2px solid #fff;border-radius:50%}
+.sgi{padding:4px 26px 4px 4px;margin-top:8px}
+.sgi span{width:44px;height:44px;top:-18px;right:-18px;background:transparent;font-size:0;line-height:0;border-radius:0}
+.sgi span::after{content:"✕";position:absolute;left:12px;top:12px;width:20px;height:20px;line-height:20px;text-align:center;font-size:.7rem;border-radius:50%;background:var(--text);color:var(--bg)}
+.og{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.oct{flex-wrap:wrap}
+.oct button{flex:1 0 44px;width:auto;min-width:44px}
+.oct button.d,.eb button.d{color:var(--danger)}
+#elStick #elNav{flex-wrap:wrap}
+.head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.head #newFile{width:auto;flex:0 0 auto;background:transparent;color:var(--danger);border:1px solid var(--danger);padding:10px 14px;font-weight:600}
+button.danger{background:var(--danger);color:var(--ondanger)}
+.errbar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:596px;margin:0 auto;z-index:70;display:flex;gap:10px;align-items:center;background:var(--errbg);color:var(--errtext);border:1px solid var(--danger);border-radius:12px;padding:8px 8px 8px 14px;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.errbar p{margin:0;flex:1;font-size:.92rem;word-break:break-word;max-height:35vh;overflow:auto}
+.errbar button{width:auto;flex:0 0 auto;min-width:44px;background:transparent;color:inherit;border:1px solid currentColor;padding:0 12px;font-weight:600}
+#errBar:not(.hide)~#toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))!important}
 </style>
 </head>
 <body>
 <main>
-<h1>PDF Toolkit</h1>
-<p class="sub">Runs entirely in your browser. Your file never leaves this device.</p>
+<div class="head"><div><h1>PDF Toolkit</h1>
+<p class="sub">Runs entirely in your browser. Your file never leaves this device.</p></div><button type="button" id="newFile" class="hide">New file</button></div>
 
 <div id="restore" class="card hide"><b>Restore your last session?</b><div class="muted" id="rsInfo" style="margin:4px 0 12px"></div><div class="tools"><button class="t" id="rsYes">Restore</button><button class="t g" id="rsNo">Discard</button></div></div>
-<p id="err" class="err hide"></p>
 <button type="button" class="drop" id="drop">
 <b>Choose a PDF</b><span>or drop it here</span>
 </button>
@@ -152,7 +184,7 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 
 <div id="busyA" class="card hide muted">Analyzing…</div>
 
-<div id="tabs" class="tabs hide"><button class="tab sel" data-v="c">Compress</button><button class="tab" data-v="e">Sign &amp; edit</button><button class="tab" data-v="o">Pages</button><button class="tab" data-v="l">Elements</button><button class="tabx" id="newFile">← New file</button></div>
+<div id="tabs" class="tabs hide"><button class="tab sel" data-v="c">Compress</button><button class="tab" data-v="e">Sign &amp; edit</button><button class="tab" data-v="o">Pages</button><button class="tab" data-v="l">Elements</button></div>
 
 <div id="panel" class="hide">
 <div class="card">
@@ -165,7 +197,7 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 </div>
 
 <div id="editor" class="hide">
-<div class="stick"><div class="tools"><button class="t" id="addSig">Signature</button><button class="t" id="addTxt">Text box</button><button class="t" id="addMono">Mono box</button></div>
+<div class="stick"><div class="tools"><button class="t" id="addSig">Add signature</button><button class="t" id="addTxt">Add text box</button><button class="t" id="addMono">Add mono box</button></div>
 <div class="tools"><button class="t" id="eSave">Save PDF</button><button class="t g" id="eCompress">Go to Compress</button></div>
 <p class="note" id="enote"></p>
 <div id="sigTray" class="hide"></div>
@@ -176,16 +208,16 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 <div id="pages"></div>
 </div>
 
-<div id="sigModal" class="modal hide"><div class="card" style="width:min(560px,100%);margin:0"><b>Draw your signature</b><canvas id="pad"></canvas><div class="tools"><button class="t g" id="padClear">Clear</button><button class="t g" id="padCancel">Cancel</button><button class="t" id="padSave">Save and use</button></div><p class="note">Saved in this browser so you can reuse it.</p></div></div>
+<div id="sigModal" class="modal hide"><div class="card" style="width:min(560px,100%);margin:0"><b>Draw your signature</b><canvas id="pad"></canvas><div class="tools"><button class="t g" id="padClear">Clear</button><button class="t g" id="padCancel">Cancel</button><button class="t" id="padSave">Add signature</button></div><p class="note">Saved in this browser so you can reuse it.</p></div></div>
 
 <div id="elp" class="hide">
 <div class="stick" id="elStick" style="margin-top:0"><div class="tools" id="elNav"><select id="elType" aria-label="Element type"><option value="img">Images</option><option value="txt">Text</option><option value="ann">Annotations</option><option value="att">Files</option><option value="fnt">Fonts</option><option value="bm">Bookmarks</option><option value="inf">Info</option><option value="cap">Capture</option></select><button class="t g ib" id="elUndo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><i id="elUc"></i></button><button class="t g ib" id="elRedo" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg><i id="elRc"></i></button><span id="elPg" style="display:flex;gap:2px;align-items:center;flex:0 0 auto"><button class="t g ib" id="ePrev" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="muted" id="eLbl" style="min-width:44px;text-align:center;font-size:.82rem"></span><button class="t g ib" id="eNext" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></span></div>
-<div id="tPanel" class="hide"><div id="tList"></div><div class="tools"><button class="t" id="tApply" disabled>Apply</button><button class="t g" id="tDel" disabled>Delete</button><button class="t g ib" id="tCopy" aria-label="Copy text" title="Copy text"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button><button class="t g ib" id="tTxt" aria-label="Save all text as .txt" title="Save all text as .txt"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button></div><div class="tools hide" id="tOpts" style="margin-top:6px"><select id="tFont" class="xin" style="width:auto;margin:0"><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times</option><option value="Courier">Courier</option></select><label class="muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="tFit" checked> Keep width</label></div><p class="note" id="tNote"></p></div>
-<div id="cPanel" class="hide"><div class="tools"><select id="rgDpi" class="xin" style="width:auto;margin:0"><option value="150">150 dpi</option><option value="300" selected>300 dpi</option><option value="600">600 dpi</option></select><button class="t" id="rgPng">Save PNG</button><button class="t g" id="rgPdf">Cropped PDF</button></div></div>
+<div id="tPanel" class="hide"><div id="tList"></div><div class="tools"><button class="t" id="tApply" disabled>Apply</button><button class="t g" id="tDel" disabled>Delete</button><button class="t g ib" id="tCopy" aria-label="Copy text" title="Copy text"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button><button class="t g ib" id="tTxt" aria-label="Extract all text as .txt" title="Extract all text as .txt"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button></div><div class="tools hide" id="tOpts" style="margin-top:6px"><select id="tFont" class="xin" style="width:auto;margin:0"><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times</option><option value="Courier">Courier</option></select><label class="muted" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="tFit" checked> Keep width</label></div><p class="note" id="tNote"></p></div>
+<div id="cPanel" class="hide"><div class="tools"><select id="rgDpi" class="xin" style="width:auto;margin:0"><option value="150">150 dpi</option><option value="300" selected>300 dpi</option><option value="600">600 dpi</option></select><button class="t" id="rgPng">Extract PNG</button><button class="t g" id="rgPdf">Extract cropped PDF</button></div></div>
 <p class="note" id="elnote"></p></div>
 <div class="card">
 <div id="e-img" class="hide"></div><div id="e-ann" class="hide"></div><div id="e-att" class="hide"></div><div id="e-bm" class="hide"></div><div id="e-inf" class="hide"></div><div id="e-fnt" class="hide"></div>
-<div id="e-cap" class="hide"><p class="note" style="margin:0 0 6px">Drag on the page to select an area, then save it. PNG is a picture of the area. A cropped PDF keeps vectors and text, but the rest of the page is still inside the file, so don’t use it to hide information.</p><div id="rgStage"></div></div>
+<div id="e-cap" class="hide"><p class="note" style="margin:0 0 6px">Drag on the page to select an area, then extract it. PNG is a picture of the area. A cropped PDF keeps vectors and text, but the rest of the page is still inside the file, so don’t use it to hide information.</p><div id="rgStage"></div></div>
 <div id="e-txt" class="hide">
 <p class="note">Tap text on the page to select it. Each box is one piece of text as stored in the file. Edited text uses the original font when it contains every character you typed, otherwise a standard font (the dropdown). Deleted text is removed from the page. Text inside images can’t be edited.</p>
 <div id="tStage"></div>
@@ -195,12 +227,12 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 </div>
 
 <div id="orgp" class="hide">
-<div class="stick"><div class="tools"><button class="t" id="oAdd">Add PDFs</button><button class="t g" id="oBlank">Insert blank</button><button class="t g" id="oUndo">Undo</button></div>
+<div class="stick"><div class="tools"><button class="t" id="oAdd">Add PDFs</button><button class="t g" id="oBlank">Add blank page</button><button class="t g" id="oUndo">Undo</button></div>
 <div class="tools"><button class="t" id="oApply">Apply</button><button class="t g" id="oSave">Apply &amp; save</button></div>
-<div id="oMove" class="hide"><div class="tools"><span class="muted">Move page <b id="oSelN"></b> to</span><input type="number" id="oTo" min="1" style="width:64px"><button class="t g" id="oGo" style="flex:0 0 auto;width:auto;padding:8px 14px">Go</button></div></div>
+<div id="oMove" class="hide"><div class="tools"><span class="muted">Move page <b id="oSelN"></b> to</span><input type="number" id="oTo" min="1" style="width:64px"><button class="t g" id="oGo" style="flex:0 0 auto;width:auto;padding:8px 14px">Move</button></div></div>
 <p class="note" id="onote"></p></div>
 <p class="note" id="oinfo"></p>
-<div class="card"><b>Save pages</b><p class="note" style="margin:4px 0 8px">Exports from the current document (tap Apply first if you changed the page order).</p><input class="xin" id="pgRange" placeholder="Pages, e.g. 1-3, 5, 8- (empty = all)"><div class="tools"><button class="t" id="pgOne">Save as one PDF</button><button class="t g" id="pgZip">Each page separately (ZIP)</button></div></div>
+<div class="card"><b>Extract pages</b><p class="note" style="margin:4px 0 8px">Creates files from the current document (tap Apply first if you changed the page order).</p><input class="xin" id="pgRange" placeholder="Pages, e.g. 1-3, 5, 8- (empty = all)"><div class="tools"><button class="t" id="pgOne">Extract as one PDF</button><button class="t g" id="pgZip">Extract each page (ZIP)</button></div></div>
 <div id="oGrid" class="og"></div>
 <input type="file" id="oFile" accept="application/pdf,.pdf" multiple class="hide">
 </div>
@@ -217,10 +249,12 @@ button.tab,button.tabx{padding:10px 3px;font-size:.8rem}
 <div id="rdesc" class="muted" style="margin-bottom:14px"></div>
 <button id="save">Save compressed PDF</button>
 <p class="note" id="rnote"></p>
-<button class="sec" id="again">Compress another file</button>
+
 </div>
 <p class="note" style="text-align:center;margin-top:24px">PDF Toolkit · build 24 Oct 2026</p>
 </main>
+<div id="errBar" class="errbar hide" role="alert" aria-live="assertive"><p id="errTxt"></p><button type="button" id="errX" aria-label="Dismiss error">Dismiss</button></div>
+<div id="newModal" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="nmT"><div class="card" style="width:min(460px,100%);margin:0"><b id="nmT">Start a new file?</b><p style="margin:8px 0 14px">You have unsaved changes. If you continue, all unsaved edits will be lost.</p><div class="tools"><button type="button" class="t g" id="nmCancel">Keep working</button><button type="button" class="t danger" id="nmGo">Discard and start new</button></div></div></div>
 <div id="toast" class="hide" style="position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--text);color:var(--bg);padding:12px 14px;border-radius:10px;text-align:center;font-size:.9rem"></div>
 
 <script>
@@ -237,7 +271,14 @@ let state = { bytes:null, name:'', images:[], total:0, ests:[], rec:null, sel:nu
 
 const fmt = n => n >= 1048576 ? (n/1048576).toFixed(n>=10485760?1:2)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
 const N = s => PDFName.of(s);
-function showErr(m){ const e=$('err'); e.textContent=m; e.classList.toggle('hide',!m); }
+const errBar=$('errBar');
+function banner(m,src){ if(!m){ errBar.classList.add('hide'); errBar.dataset.src=''; return; } $('errTxt').textContent=m; errBar.dataset.src=src||''; errBar.classList.remove('hide'); }
+function showErr(m){ banner(m,'err'); }
+$('errX').onclick=()=>banner('');
+const ERRRE=/^(Failed|Couldn|Compression failed|Skipped|This (image|font|PDF)|No valid|No images|No selectable|Nothing to change|Add a signature|Drag on|Preview|The page viewer|Copying is blocked|Decryption)/;
+['elnote','enote','onote','rnote','tNote'].forEach(id=>new MutationObserver(()=>{ const t=$(id).textContent.trim(); if(!t) return; if(ERRRE.test(t)) banner(t,id); else if(errBar.dataset.src===id) banner(''); }).observe($(id),{childList:true,characterData:true,subtree:true}));
+let dirty=false;
+const pending=()=>dirty||!!(state.out&&!state.outSaved)||!!(org&&org.undo.length);
 const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
 function silence(){
   const n=8000, b=new Uint8Array(44+n), v=new DataView(b.buffer), w=(o,s)=>[...s].forEach((c,i)=>b[o+i]=c.charCodeAt(0));
@@ -416,7 +457,7 @@ async function load(file){
     }
     state.sel = state.rec ?? 2;
     renderLevels();
-    $('busyA').classList.add('hide'); $('tabs').classList.remove('hide'); resetX(); show('c'); guardOn(); await initEditor(); idb.set('file',{name:file.name,bytes,ts:Date.now()}).catch(()=>{}); touch();
+    $('busyA').classList.add('hide'); $('tabs').classList.remove('hide'); $('newFile').classList.remove('hide'); resetX(); show('c'); guardOn(); await initEditor(); idb.set('file',{name:file.name,bytes,ts:Date.now()}).catch(()=>{}); touch();
     if (state.rec===null){
       $('fmeta').innerHTML += '<br><span class="warn">Few compressible images found — expect little or no reduction.</span>';
     }
@@ -520,7 +561,7 @@ async function run(){
     $('ptxt').textContent = 'Saving…'; $('pbar').style.width = '100%'; await tick();
     let out = await doc.save({ useObjectStreams:true });
     if(items.length){ $('ptxt').textContent='Adding signatures and text…'; await tick(); out = await buildEdited(out); }
-    state.out = out;
+    state.out = out; state.outSaved = false;
     $('prog').classList.add('hide'); $('result').classList.remove('hide');
     const pct = Math.round(100*(1-out.length/state.total));
     if (out.length >= state.total){
@@ -539,7 +580,8 @@ async function run(){
   } finally { stop(); }
 }
 
-async function saveBytes(out, name, note){
+async function saveBytes(out,name,note){ await saveBytes0(out,name,note); return /^(Saved|Shared|Download started)/.test(note.textContent); }
+async function saveBytes0(out, name, note){
   note.textContent = '';
   try{
     const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
@@ -563,7 +605,7 @@ async function saveBytes(out, name, note){
   }
 }
 
-const save = () => saveBytes(state.out, state.name.replace(/\.pdf$/i,'') + '-compressed.pdf', $('rnote'));
+const save = async () => { if(await saveBytes(state.out, state.name.replace(/\.pdf$/i,'') + '-compressed.pdf', $('rnote'))){ state.outSaved=true; dirty=false; } };
 
 /* ---------- Sign & edit ---------- */
 function show(v){
@@ -632,7 +674,7 @@ function build(it){
   it.p.wrap.appendChild(el); layout(it);
 }
 function layout(it){
-  const s=it.p.s, st=it.el.style; touch();
+  const s=it.p.s, st=it.el.style; touch(); if(!restoring) dirty=true;
   if(it.type==='sig'){ const r=it.rot||0; st.transform=`rotate(${r}deg)`; it.el.querySelector('.ctl').style.transform=`rotate(${-r}deg)`; }
   st.left=it.x*s+'px'; st.top=it.y*s+'px'; st.width=it.w*s+'px'; st.height=it.h*s+'px'; it.el.classList.toggle('below',it.y*s<36);
   if(it.inp){ const q=it.inp.style; q.fontFamily=FF[it.type==='mono'?'Courier':it.font]; q.fontWeight=it.b?'700':'400'; q.fontStyle=it.i?'italic':'normal'; q.textDecoration=it.u?'underline':'none'; q.color=it.color; q.textAlign=it.align; }
@@ -670,7 +712,7 @@ function select(it){
   $('pFs').value=it.fs; $('pCells').value=it.cells||'';
   $('pFont').classList.toggle('hide',it.type!=='text'); $('pAl').classList.toggle('hide',it.type!=='text'); sync();
 }
-function del(it){ it.el.remove(); items=items.filter(i=>i!==it); touch(); if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
+function del(it){ it.el.remove(); items=items.filter(i=>i!==it); touch(); dirty=true; if(cur===it){ cur=null; $('sel').classList.add('hide'); } }
 $('pages').addEventListener('pointerdown',e=>{ if(cur&&!e.target.closest('.it')){ cur.el.classList.remove('sel'); cur=null; $('sel').classList.add('hide'); } });
 $('pFs').oninput=e=>{ if(cur){ cur.fs=clamp(+e.target.value||12,4,96); layout(cur); } };
 $('pCells').oninput=e=>{ if(cur&&cur.type==='mono'){ cur.cells=clamp(parseInt(e.target.value)||0,0,80); cur.inp.maxLength=cur.cells||524288; layout(cur); } };
@@ -686,8 +728,8 @@ function renderTray(){
     w.firstChild.src=d; w.onclick=e=>{ if(e.target.tagName==='SPAN'){ sigs.splice(i,1); persist(); renderTray(); } else { addItem('sig',d); t.classList.add('hide'); } };
     box.appendChild(w);
   });
-  const b=document.createElement('button'); b.className='t g'; b.style.flex='0 0 auto'; b.textContent='+ New signature'; b.onclick=openPad; box.appendChild(b);
-  const b2=document.createElement('button'); b2.className='t g'; b2.style.flex='0 0 auto'; b2.textContent='Import image'; b2.onclick=()=>$('sigFile').click(); box.appendChild(b2);
+  const b=document.createElement('button'); b.className='t g'; b.style.flex='0 0 auto'; b.textContent='Add new signature'; b.onclick=openPad; box.appendChild(b);
+  const b2=document.createElement('button'); b2.className='t g'; b2.style.flex='0 0 auto'; b2.textContent='Add from image'; b2.onclick=()=>$('sigFile').click(); box.appendChild(b2);
 }
 $('addSig').onclick=()=>{ renderTray(); $('sigTray').classList.toggle('hide'); };
 const pad=$('pad'), pc=pad.getContext('2d'); pad.width=1200; pad.height=400;
@@ -779,11 +821,11 @@ async function buildEdited(src){
 $('eSave').onclick=async()=>{
   if(!items.length){ $('enote').textContent='Add a signature or text box first.'; return; }
   $('enote').textContent='Preparing…';
-  try{ const b=await buildEdited(); await saveBytes(b,state.name.replace(/\.pdf$/i,'')+'-edited.pdf',$('enote')); }
+  try{ const b=await buildEdited(); if(await saveBytes(b,state.name.replace(/\.pdf$/i,'')+'-edited.pdf',$('enote'))) dirty=false; }
   catch(e){ $('enote').textContent='Couldn’t build the PDF: '+(e.message||e); }
 };
 $('eCompress').onclick=async()=>{
-  try{ const b=items.length?await buildEdited():state.bytes; await load(new File([b],state.name,{type:'application/pdf'})); show('c'); }
+  try{ const had=items.length; const b=had?await buildEdited():state.bytes; await load(new File([b],state.name,{type:'application/pdf'})); if(had) dirty=true; show('c'); }
   catch(e){ $('enote').textContent='Failed: '+(e.message||e); }
 };
 
@@ -1134,7 +1176,7 @@ async function fontOtf(it){
     const desc=own.desc.lookupMaybe(N('FontDescriptor'),PDFDict), asc=desc?nv(desc.lookup(N('Ascent'))):0, dsc=desc?nv(desc.lookup(N('Descent'))):0;
     const r=cffToOtf(bytes,{name:it.name.replace(/^[A-Z]{6}\+/,''),uni:parseToUni(own.top),prefer:EL.usage.get(own.top),widthOfCid:fi?(c=>fi.w(c)):null,ascent:asc>0&&asc<2000?Math.round(asc):800,descent:dsc<0&&dsc>-1000?Math.round(dsc):-200});
     await saveBytes(r.bytes,`${it.name.replace(/^[A-Z]{6}\+/,'')}.otf`,$('elnote'));
-    $('elnote').textContent=`Saved .otf: ${r.glyphs} glyphs, ${r.chars} characters mapped.`;
+    $('elnote').textContent=`Extracted .otf: ${r.glyphs} glyphs, ${r.chars} characters mapped.`;
   }catch(e){ $('elnote').textContent='Couldn\u2019t build the .otf: '+(e.message||e); }
 }
 async function elFonts(){
@@ -1159,10 +1201,10 @@ async function elFonts(){
       }
     }
     if(!list.length){ box.innerHTML='<p class="muted">No embedded font files found. Fonts that aren\u2019t embedded rely on the viewer\u2019s own fonts.</p>'; return; }
-    box.innerHTML='<p class="note" style="margin:0 0 6px">Fonts in PDFs are usually subsets containing only the characters used, and may be licensed. A bare .cff file isn\u2019t installable; <b>Save .otf</b> wraps it into a normal OpenType font with a character map, so it opens in font tools.</p>';
+    box.innerHTML='<p class="note" style="margin:0 0 6px">Fonts in PDFs are usually subsets containing only the characters used, and may be licensed. A bare .cff file isn\u2019t installable; <b>Extract .otf</b> wraps it into a normal OpenType font with a character map, so it opens in font tools.</p>';
     list.forEach(it=>{
       const row=document.createElement('div'); row.className='xrow';
-      row.innerHTML=`<div class="xinfo"><b>${it.name.replace(/</g,'')}</b><br>${it.ext.toUpperCase()} \u00b7 ${fmt(it.st.contents.length)}${it.sub?' \u00b7 subset':''}</div><div class="eb"><button data-a="raw">Save .${it.ext}</button>${it.ext==='cff'?'<button data-a="otf">Save .otf</button>':''}</div>`;
+      row.innerHTML=`<div class="xinfo"><b>${it.name.replace(/</g,'')}</b><br>${it.ext.toUpperCase()} \u00b7 ${fmt(it.st.contents.length)}${it.sub?' \u00b7 subset':''}</div><div class="eb"><button data-a="raw">Extract .${it.ext}</button>${it.ext==='cff'?'<button data-a="otf">Extract .otf</button>':''}</div>`;
       row.querySelector('.eb').onclick=async e=>{
         const b=e.target.closest('button'); if(!b) return;
         if(b.dataset.a==='otf'){ fontOtf(it); return; }
@@ -1172,7 +1214,7 @@ async function elFonts(){
       };
       box.appendChild(row);
     });
-  }catch(e){ box.innerHTML='<p class="warn">Couldn\u2019t scan fonts: '+(e.message||e)+'</p>'; }
+  }catch(e){ banner('Could not scan fonts: '+(e.message||e),'elnote'); box.innerHTML='<p class="warn">Couldn\u2019t scan fonts: '+(e.message||e)+'</p>'; }
 }
 
 /* ---------- Session safety ---------- */
@@ -1199,7 +1241,7 @@ function restoreItems(list){
     if(it.inp){ it.inp.value=it.text||''; if(it.cells) it.inp.maxLength=it.cells; layout(it); }
     items.push(it);
   }
-  restoring=false; touch();
+  restoring=false; touch(); if(list.length) dirty=true;
 }
 (async()=>{
   try{
@@ -1222,7 +1264,7 @@ window.addEventListener('popstate',()=>{
   gArm=Date.now()+3500; try{ history.pushState({g:1},''); }catch(e){}
   toast('Swipe back again to leave. Your work is saved on this device and can be restored.');
 });
-window.addEventListener('beforeunload',e=>{ if(items.length){ e.preventDefault(); e.returnValue=''; } });
+window.addEventListener('beforeunload',e=>{ if(pending()){ e.preventDefault(); e.returnValue=''; } });
 
 /* ---------- Import signature ---------- */
 $('sigFile').onchange=async e=>{
@@ -1260,7 +1302,7 @@ async function initOrg(){
 }
 async function thumb(o,e,box){
   try{
-    const page=await o.src[e.s].doc.getPage(e.i+1), rt=(page.rotate+(e.rot||0))%360, v0=page.getViewport({scale:1,rotation:rt}), vp=page.getViewport({scale:130/v0.width*Math.min(window.devicePixelRatio||1,2),rotation:rt}), c=canvas(vp.width,vp.height);
+    const page=await o.src[e.s].doc.getPage(e.i+1), rt=(page.rotate+(e.rot||0))%360, v0=page.getViewport({scale:1,rotation:rt}), vp=page.getViewport({scale:170/v0.width*Math.min(window.devicePixelRatio||1,2),rotation:rt}), c=canvas(vp.width,vp.height);
     c.style.cssText='width:100%;height:100%;display:block';
     await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; e.cv=c; box.appendChild(c);
   }catch(err){}
@@ -1338,11 +1380,11 @@ async function orgApply(){
     });
     const bytes=await out.save();
     await load(new File([bytes],state.name,{type:'application/pdf'}));
-    show('o'); return true;
+    show('o'); dirty=true; return true;
   }catch(err){ $('onote').textContent='Couldn\u2019t build the PDF: '+(err.message||err)+(/encrypt/i.test(err.message||'')?' (password-protected files can\u2019t be merged)':''); return false; }
 }
 $('oApply').onclick=async()=>{ if(await orgApply()) $('onote').textContent='Applied. The other tabs now use the new document.'; };
-$('oSave').onclick=async()=>{ if(await orgApply()) await saveBytes(state.bytes,`${base()}-organized.pdf`,$('onote')); };
+$('oSave').onclick=async()=>{ if(await orgApply()){ if(await saveBytes(state.bytes,`${base()}-organized.pdf`,$('onote'))) dirty=false; } };
 
 
 /* ---------- Elements: text engine ---------- */
@@ -1608,7 +1650,7 @@ function elSec(k){
 function elRender(){
   const k=EL.sec, tot=pdfDoc?pdfDoc.numPages:1; EL.page=Math.min(Math.max(1,EL.page),tot); $('eLbl').textContent=`${EL.page}/${tot}`;
   const host=$('e-'+k), sc=document.scrollingElement||document.documentElement, y=sc.scrollTop; host.style.minHeight=host.offsetHeight+'px';
-  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="warn">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
+  ({img:elImgs,ann:elAnns,att:elAtts,bm:elMarks,inf:elInfo,txt:tPage,fnt:elFonts,cap:capPage})[k]().catch(e=>{ const m='Couldn\u2019t read this part of the file: '+(e.message||e); banner(m,'elnote'); if(k==='txt') $('tNote').textContent=m; else $('e-'+k).innerHTML='<p class="warn">'+m+'</p>'; }).finally(()=>{ host.style.minHeight=''; sc.scrollTop=y; });
 }
 $('ePrev').onclick=()=>{ if(EL&&EL.page>1){ EL.page--; elRender(); } };
 $('eNext').onclick=()=>{ if(EL&&pdfDoc&&EL.page<pdfDoc.numPages){ EL.page++; elRender(); } };
@@ -1624,7 +1666,7 @@ async function elApply(fn){
     const doc=await PDFDocument.load(base0,{ignoreEncryption:true,updateMetadata:false});
     await fn(doc); const bytes=await doc.save();
     elH.u.push(prev); if(elH.u.length>10) elH.u.shift(); elH.r.length=0;
-    await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
+    await load(new File([bytes],state.name,{type:'application/pdf'})); show('l'); dirty=true; $('elnote').textContent=(elMsg||'Done.'); elMsg=''; return true;
   }catch(e){ $('elnote').textContent='Failed: '+(e.message||e); return false; }
 }
 $('elUndo').onclick=async()=>{ if(!elH.u.length) return; elH.r.push(state.bytes); if(elH.r.length>10) elH.r.shift(); await elGoto(elH.u.pop()); $('elnote').textContent='Undone.'; };
@@ -1679,7 +1721,7 @@ async function imgSaveAll(d){
 /* images */
 async function elImgs(){
   const n=EL.page, box=$('e-img'), d=await EL.p, doc=await getXDoc(), list=d.imgs.filter(i=>i.pages.includes(n)), other=d.imgs.filter(i=>!i.pages.length).length;
-  box.innerHTML=`<p class="note" style="margin:0 0 6px">${list.length} image${list.length===1?'':'s'} on this page${other?` \u00b7 ${other} in the file aren\u2019t used directly on a page`:''}. Tap an image row (or its dashed box on the page) to highlight it. Delete leaves the space empty. Replace stretches your image to the original proportions. Save keeps the original file, or a PNG for formats browsers can\u2019t open.</p><div class="tools" style="margin-bottom:8px"><button class="t g" id="imgAll">Save all images in the document (ZIP)</button></div>`;
+  box.innerHTML=`<p class="note" style="margin:0 0 6px">${list.length} image${list.length===1?'':'s'} on this page${other?` \u00b7 ${other} in the file aren\u2019t used directly on a page`:''}. Tap an image row (or its dashed box on the page) to highlight it. Delete leaves the space empty. Replace stretches your image to the original proportions. Extract keeps the original file, or a PNG for formats browsers can\u2019t open.</p><div class="tools" style="margin-bottom:8px"><button class="t g" id="imgAll">Extract all images (ZIP)</button></div>`;
   $('imgAll').onclick=()=>imgSaveAll(d);
   const host=document.createElement('div'); box.appendChild(host);
   let dec=[], pg=null; try{ const r=await pageImages(n); dec=r.imgs.map((im,i)=>({im,box:r.boxes[i],used:false})); pg=r.page; }catch(e){}
@@ -1688,7 +1730,7 @@ async function elImgs(){
   const rows=[], boxes=[], S={};
   for(const [i,im] of list.entries()){
     const row=document.createElement('div'); row.className='xrow'; rows.push(row);
-    row.innerHTML=rowHtml('\u2026',`<b>Image ${i+1}</b><br>${im.w}\u00d7${im.h} px \u00b7 ${fmt(im.bytes)}`,'<button data-a="save">Save</button><button data-a="rep">Replace</button><button data-a="gray">Gray</button><button data-a="del" class="d">Delete</button>');
+    row.innerHTML=rowHtml('\u2026',`<b>Image ${i+1}</b><br>${im.w}\u00d7${im.h} px \u00b7 ${fmt(im.bytes)}`,'<button data-a="save">Extract</button><button data-a="rep">Replace</button><button data-a="gray">Gray</button><button data-a="del" class="d">Delete</button>');
     const th=row.firstChild, m=dec.find(x=>!x.used&&x.im.width===im.w&&x.im.height===im.h);
     boxes.push(m?m.box:null);
     try{
@@ -1772,7 +1814,7 @@ async function elAtts(){
   const box=$('e-att'), d=await EL.p;
   if(!d.atts.length){ box.innerHTML='<p class="muted">No embedded file attachments found. File-attachment annotations appear under Annotations.</p>'; return; }
   box.innerHTML='';
-  d.atts.forEach(a=>{ const row=document.createElement('div'); row.className='xrow'; row.innerHTML=`<div class="xinfo"><b>${esc(a.name)}</b><br>${fmt(a.size)}</div><div class="eb"><button data-a="save">Save</button><button data-a="del" class="d">Delete</button></div>`; row.querySelector('.eb').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.a==='save') attSave(a); else elApply(d2=>opDelAttachment(d2,a.n)); }; box.appendChild(row); });
+  d.atts.forEach(a=>{ const row=document.createElement('div'); row.className='xrow'; row.innerHTML=`<div class="xinfo"><b>${esc(a.name)}</b><br>${fmt(a.size)}</div><div class="eb"><button data-a="save">Extract</button><button data-a="del" class="d">Delete</button></div>`; row.querySelector('.eb').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.a==='save') attSave(a); else elApply(d2=>opDelAttachment(d2,a.n)); }; box.appendChild(row); });
   const all=document.createElement('button'); all.className='t g'; all.style.marginTop='10px'; all.textContent='Remove all attachments'; all.onclick=()=>elApply(d2=>opDelAllAttachments(d2)); box.appendChild(all);
 }
 
@@ -1789,7 +1831,7 @@ async function elInfo(){
   const box=$('e-inf'), d=await EL.p, keys=['Title','Author','Subject','Keywords','Creator','Producer','CreationDate','ModDate'];
   box.innerHTML=keys.map(k=>`<label class="muted" style="display:block;margin-bottom:8px">${k}<input class="xin" data-k="${k}" style="margin:4px 0 0"></label>`).join('')+
     `<label class="muted" style="display:block;margin-bottom:10px"><input type="checkbox" id="infX" ${d.xmp?'checked':''}> Also remove XMP metadata${d.xmp?'':' (none present)'}</label>
-     <div class="tools"><button class="t" id="infSave">Save changes</button><button class="t g" id="infWipe">Strip all metadata</button></div>
+     <div class="tools"><button class="t" id="infSave">Apply</button><button class="t g" id="infWipe">Strip all metadata</button></div>
      <p class="muted" style="margin:14px 0 6px">JavaScript: ${d.js?d.js+' place'+(d.js>1?'s':'')+' found':'none found'}</p><button class="t g" id="jsDel" ${d.js?'':'disabled'}>Remove all JavaScript</button>`;
   box.querySelectorAll('[data-k]').forEach(i=>i.value=d.info[i.dataset.k]||'');
   $('infSave').onclick=()=>{ const v={}; box.querySelectorAll('[data-k]').forEach(i=>v[i.dataset.k]=i.value.trim()); elApply(d2=>opSetInfo(d2,v,$('infX').checked)); };
@@ -1915,12 +1957,7 @@ $('tTxt').onclick=async()=>{
   }catch(e){ $('tNote').textContent='Failed: '+(e.message||e); }
 };
 
-let armed=null;
-$('newFile').onclick=()=>{
-  const b=$('newFile');
-  if(items.length&&!armed){ b.textContent='Discard edits?'; armed=setTimeout(()=>{ armed=null; b.textContent='← New file'; },4000); return; }
-  clearTimeout(armed); armed=null; b.textContent='← New file'; $('again').click();
-};
+
 $('file').onchange = e => e.target.files[0] && load(e.target.files[0]);
 const dz = $('drop');
 ['dragover','dragenter'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('over')}));
@@ -1929,7 +1966,17 @@ dz.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) load(f); 
 dz.onclick = () => $('file').click();
 $('go').onclick = run;
 $('save').onclick = save;
-$('again').onclick = () => { state.out=null; $('rnote').textContent=''; elH.u.length=elH.r.length=0; $('file').value=''; idb.del('file').catch(()=>{}); idb.del('items').catch(()=>{}); ['tabs','editor','panel','result','orgp','elp'].forEach(i=>$(i).classList.add('hide')); $('drop').classList.remove('hide'); };
+function resetAll(){
+  state.out=null; state.outSaved=false; state.bytes=null; dirty=false; items=[]; cur=null; $('pages').innerHTML=''; $('rnote').textContent=''; elH.u.length=elH.r.length=0; $('file').value='';
+  idb.del('file').catch(()=>{}); idb.del('items').catch(()=>{});
+  ['tabs','editor','panel','result','orgp','elp','prog'].forEach(i=>$(i).classList.add('hide')); $('newFile').classList.add('hide'); banner(''); $('drop').classList.remove('hide');
+}
+const nm=$('newModal');
+$('newFile').onclick=()=>{ if(!pending()){ resetAll(); return; } nm.classList.remove('hide'); $('nmCancel').focus(); };
+$('nmCancel').onclick=()=>nm.classList.add('hide');
+$('nmGo').onclick=()=>{ nm.classList.add('hide'); resetAll(); };
+nm.addEventListener('pointerdown',e=>{ if(e.target===nm) nm.classList.add('hide'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') nm.classList.add('hide'); });
 </script>
 </body>
 </html>
