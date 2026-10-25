@@ -1734,7 +1734,8 @@ async function histStep(from,to,ing,done){
   }catch(e){ from.push(st); histMsg('Failed: '+(e.message||e)); }
   finally{ histBusy=false; elHistBtns(); }
 }
-const histUndo=()=>histStep(elH.u,elH.r,'Undoing','Undone'), histRedo=()=>histStep(elH.r,elH.u,'Redoing','Redone');
+function histUndo(){ return histStep(elH.u,elH.r,'Undoing','Undone'); }
+function histRedo(){ return histStep(elH.r,elH.u,'Redoing','Redone'); }
 async function edApply(){
   const n=items.length, sc=document.scrollingElement||document.documentElement, y0=sc.scrollTop; if(!n){ $('enote').textContent='Nothing to apply. Add a signature or text box first.'; return; }
   $('enote').textContent='Applying\u2026'; await tick();
