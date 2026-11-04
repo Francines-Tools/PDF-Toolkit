@@ -1,0 +1,68 @@
+name: Run Latest Apply Script
+
+on:
+  workflow_dispatch:
+    inputs:
+      keyword:
+        description: 'Optional: Filter text after "apply" (e.g., entering "nov" runs "apply_nov.mjs")'
+        required: false
+        default: ''
+
+jobs:
+  run-node:
+    runs-on: ubuntu-latest
+
+    # Crucial permission so the workflow can write changes back to your repository
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Find and Run Newest Apply Script
+        run: |
+          # 1. Find all matching files starting with 'apply' and containing the optional keyword
+          MAPFILE=()
+          while IFS= read -r line; do
+              MAPFILE+=("$line")
+          done < <(ls -t apply*"${{ inputs.keyword }}"*.mjs 2>/dev/null)
+          
+          TOTAL_FILES=${#MAPFILE[@]}
+          
+          # 2. Handle the case where no files match
+          if [ $TOTAL_FILES -eq 0 ]; then
+            echo "❌ Error: No files starting with 'apply' and containing '${{ inputs.keyword }}' were found."
+            exit 1
+          fi
+          
+          # 3. Select the newest file
+          TARGET_FILE="${MAPFILE}"
+          echo "🚀 Executing: $TARGET_FILE"
+          
+          # 4. Execute the file
+          node "$TARGET_FILE"
+
+      - name: Commit and Push Changes
+        run: |
+          # Configure Git with a built-in GitHub Actions Bot profile
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          
+          # Stage all modified and untracked files
+          git add -A
+          
+          # Only commit if there are actual structural file changes to push
+          if git diff-index --quiet HEAD --; then
+            echo "ℹ️ No changes detected. Your repo is already up to date!"
+          else
+            echo "📝 Changes detected! Committing updates to the repository..."
+            git commit -m "Auto-update from Node script run via GitHub Actions"
+            git push
+            echo "✅ Changes successfully saved and pushed to repository!"
+          fi
