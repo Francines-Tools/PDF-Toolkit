@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "PDF Toolkit",
+  "short_name": "PDF Toolkit",
+  "description": "A private PDF toolkit that works on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#2f6f4f",
+  "icons": [
+    {
+      "src": "./pdf-toolkit-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pdf-toolkit-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
