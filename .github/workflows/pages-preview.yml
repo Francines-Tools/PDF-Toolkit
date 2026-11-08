@@ -1,0 +1,51 @@
+name: Deploy Pages Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed] # Triggers on PR creation, updates, or close events
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write       # Required to write preview files to the deployment branch
+  pull-requests: write  # Required to post the preview link directly in your PR comments
+
+jobs:
+  preview:
+    # Only run the deploy steps if the PR is open or updated. 
+    # If the PR is closed, the 'rajyan/preview-pages' action automatically handles cleanup.
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Feature Branch Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      # --- RUN YOUR PATCH SCRIPTS ---
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Dynamically runs any local python file matching your patch schema
+      - name: Run Patch Scripts
+        run: |
+          SCRIPT_PATH=$(find . -name "*_patch.py" | head -n 1)
+          if [ -z "$SCRIPT_PATH" ]; then
+            echo "No patch script found. Skipping."
+          else
+            echo "Running script: $SCRIPT_PATH"
+            python "$SCRIPT_PATH"
+          fi
+      # --------------------------------------------------------
+
+      - name: Deploy Preview to Subfolder
+        uses: rajyan/preview-pages@v1
+        with:
+          # Folder to deploy. Use "." if your files are in the repository root.
+          source-dir: . 
+          # The branch serving your live GitHub Pages site.
+          target-branch: main 
