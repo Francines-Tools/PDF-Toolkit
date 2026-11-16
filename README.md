@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="pdf-toolkit-icon.svg" alt="Logo" width="200">
+</div>
+
 # PDF Toolkit
 
 A private, all-in-one PDF tool that runs entirely in your browser. Compress a PDF, sign it, fill in forms, rearrange pages, and pull out or change the things inside it, all on your phone or computer.
