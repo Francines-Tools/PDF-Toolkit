@@ -2270,6 +2270,27 @@ const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+function stripRuns(runs, n) {
+  let left = n;
+  const out = [];
+  for (const r of runs) {
+    if (left >= r.t.length) { left -= r.t.length; continue; }
+    out.push({ t:r.t.slice(left), b:r.b, i:r.i });
+    left = 0;
+  }
+  if (out.length) out[0].t = out[0].t.replace(/^\s+/, '');
+  return out;
+}
+function bulletOf(l) {
+  const m = l.text.match(/^([\u2022\u00b7\u25aa\u25e6\u2023\u2219]|[-\u2013\u2014](?=\s)|(\d{1,3})[.)](?=\s))\s*/);
+  if (!m) return null;
+  const runs = stripRuns(l.runs || [{ t:l.text }], m[0].length);
+  const text = clean(runs.map(r => r.t).join(''));
+  if (!text) return null;
+  /* a long numbered line is a footnote or a section, not a list item */
+  if (m[2] && text.length > 60) return null;
+  return { ordered:!!m[2], runs, text };
+}
 const joinText = (a, b) => {
   if (!a) return b;
   if (/[\u00ad-]$/.test(a) && /^[\p{Ll}]/u.test(b)) return a.replace(/[\u00ad-]$/, '') + b;
@@ -3341,7 +3362,7 @@ async function convert() {
         const prev = seenText.get(it.s) || [];
         let dup = false;
         for (const q of prev) {
-          if (Math.abs(q.x - it.x) < it.fs * 0.8 && Math.abs(q.y - it.y) < it.fs * 1.4) { dup = true; break; }
+          if (Math.abs(q.x - it.x) < it.fs * 0.6 && Math.abs(q.y - it.y) < it.fs * 0.8) { dup = true; break; }
         }
         if (dup) continue;
         if (prev.length < 6) prev.push(it);
@@ -3552,7 +3573,8 @@ async function convert() {
 
     /* blocks */
     const blocks = [];
-    let para = null, paraStart = 0, prev = null;
+    let para = null, paraStart = 0, prev = null, listBlock = null;
+    const flushList = () => { if (listBlock) { blocks.push(listBlock); listBlock = null; } };
     const tidyRuns = runs => {
       let prevSpace = true;
       const out = [];
@@ -3597,6 +3619,7 @@ async function convert() {
       const asImage = keepPics && isPicPage && !p.blank;
       if (asImage) {
         pushPara();
+        flushList();
         let img = p.pageImgBlob || null;
         if (!img) { try { img = await renderPage(p); } catch (e) {} }
         if (img) {
@@ -3628,6 +3651,7 @@ async function convert() {
         let fi = 0;
         const addMark = m => {
           pushPara();
+          flushList();
           if (m.kind === 'table') { blocks.push({ type:'table', table:m.table, pg:p.n }); return; }
           const name = 'fig-' + p.n + '-' + (++figSeq) + '.jpg';
           images.push({ name, blob:m.fig.blob, alt:m.fig.alt });
@@ -3645,6 +3669,7 @@ async function convert() {
             continue;
           }
           if (lvl) {
+            flushList();
             const pb = blocks[blocks.length - 1], type = lvl === 1 ? 'h1' : 'h2';
             const near = prev && prev.p === p.n && (prev.l.y - l.y) <= Math.max(prev.l.size, l.size) * 1.6;
             if (pb && pb.type === type && near && !/[.!?:]$/.test(pb.text)) {
@@ -3663,9 +3688,30 @@ async function convert() {
           if (inFoot && l.size <= bodySize * 0.94 && NOTEHEAD.test(l.text)) {
             // footnote-like line: collect under the chapter's Notes
             pushPara();
+            flushList();
             blocks.push({ type:'note', text:l.text, pg:p.n });
             prev = null;
             continue;
+          }
+          const bullet = bulletOf(l);
+          if (bullet) {
+            pushPara();
+            if (listBlock && listBlock.ordered !== bullet.ordered) flushList();
+            if (!listBlock) listBlock = { type:'list', ordered:bullet.ordered, items:[], pg:p.n, x:l.x0 };
+            listBlock.items.push({ runs:bullet.runs, text:bullet.text });
+            prev = { l, p:p.n };
+            continue;
+          }
+          if (listBlock) {
+            const indented = l.x0 > listBlock.x + 4 && l.x0 < listBlock.x + 80;
+            if (indented) {
+              const item = listBlock.items[listBlock.items.length - 1];
+              item.runs = item.runs.concat([{ t:' ', b:false, i:false }], l.runs);
+              item.text = clean(item.runs.map(r => r.t).join(''));
+              prev = { l, p:p.n };
+              continue;
+            }
+            flushList();
           }
           const samePage = prev && prev.p === p.n;
           if (prev && joinable(prev.l, l, samePage, bnd.left, bnd.right)) appendPara(l);
@@ -3686,6 +3732,8 @@ async function convert() {
     }
     pushPara();
 
+    pushPara();
+    flushList();
     if (!blocks.length) throw new Error('No readable text found in this PDF.');
 
     /* chapters */
@@ -3888,6 +3936,10 @@ ${body.html}
         } else out.push('<p>' + runsHtml(b.runs || [{ t:b.text }]) + '</p>');
       }
       else if (b.type === 'table') out.push(tableXhtml(b.table));
+      else if (b.type === 'list') {
+        const tag = b.ordered ? 'ol' : 'ul';
+        out.push('<' + tag + '>' + b.items.map(it => '<li>' + runsHtml(it.runs || [{ t:it.text }]) + '</li>').join('') + '</' + tag + '>');
+      }
       else if (b.type === 'img') out.push(`<div class="fig"><img src="../images/${b.img.name}" alt="${esc(b.img.alt)}"/></div>`);
       else if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') out.push(`<${b.type}${b.id ? ` id="${b.id}"` : ''}>${esc(b.text)}</${b.type}>`);
     }
@@ -3979,6 +4031,8 @@ h1+p,h2+p,h3+p,p.first{text-indent:0}
 .notes h2{font-size:1em;margin:0 0 .5em}
 .notes p{text-indent:0;margin:.3em 0;text-align:left}
 table{margin:1em 0;border-collapse:collapse;width:100%;font-size:.92em;text-align:left}
+ul,ol{margin:.6em 0 .7em 1.3em;padding-left:.4em}
+li{margin:.25em 0;text-indent:0}
 .toc{text-indent:0;margin:.3em 0}
 .toc .pg{float:right;color:#555;font-size:.9em}
 th,td{border:1px solid #999;padding:.3em .45em;vertical-align:top}
