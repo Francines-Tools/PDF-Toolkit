@@ -115,10 +115,11 @@ Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send
 - **Chapters and a table of contents.** Section headings become chapters; smaller headings become nested entries you can tap.
 - **Running heads, feet and page numbers** are detected and removed.
 - **Pictures are kept.** Graphs, charts, diagrams and illustrations are found on each page and cropped, then placed between the paragraphs they belong to. This works for pictures embedded in the PDF and for drawings made of vector shapes. Full-page backgrounds, watermarks, rules and logos in the margins are left out. Pages that are one big picture (scans) come through as page images.
-- **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns, including two-column tables and tables with alternating shaded rows. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
+- **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns, including two-column tables, two-row tables, and tables with alternating shaded rows — shaded and plain rows are kept together, and a header that wraps over several lines is folded back into one header row. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
 - **Two-column pages** are read one column at a time, so the text stays in order.
 - **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
 - **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
+- **Contents pages are kept.** A printed table of contents becomes its own chapter, with each title and its page number on one line instead of numbers being glued to the text or turned into headings.
 - Title, author and language are filled in from the PDF but you can change them before converting.
 - Bold and italic text is kept where the PDF's fonts identify it.
 

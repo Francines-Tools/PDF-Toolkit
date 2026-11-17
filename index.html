@@ -2601,109 +2601,251 @@ function tableFromGrid(t, items) {
   return { rows, header: headerCells > 0 && headerBold * 2 >= headerCells, ruled:true, x0:t.x0, x1:t.x1, y0:t.y0, y1:t.y1 };
 }
 
-function looseTables(lines) {
+/* A contents page: left titles with right-aligned page numbers. */
+function tocLines(p) {
+  const rows = new Map();
+  for (const l of p.lines) {
+    if (!l.text) continue;
+    const k = Math.round(l.y / 3) * 3;
+    if (!rows.has(k)) rows.set(k, []);
+    rows.get(k).push(l);
+  }
+  const out = [], used = new Set(), others = [];
+  for (const y of [...rows.keys()].sort((a, b) => b - a)) {
+    const segs = rows.get(y).sort((a, b) => a.x0 - b.x0);
+    if (segs.length !== 2) { others.push(...segs); continue; }
+    const a = segs[0], b = segs[1];
+    if (b.x0 < p.w * 0.62) { others.push(a, b); continue; }
+    if (!/^[\dIVXLC]{1,6}$/i.test(b.text.trim())) { others.push(a, b); continue; }
+    if (a.text.length < 3 || a.x1 > b.x0 - 8) { others.push(a, b); continue; }
+    used.add(a); used.add(b);
+    const runs = (a.runs || [{ t:a.text }]).map(r => ({ t:r.t, b:r.b, i:r.i }));
+    runs.push({ t:' ', b:false, i:false });
+    for (const r of (b.runs || [{ t:b.text }])) runs.push({ t:r.t, b:r.b, i:r.i });
+    out.push({
+      y, size:a.size, x0:a.x0, x1:b.x1, toc:true,
+      text:clean(a.text + ' ' + b.text), runs
+    });
+  }
+  if (out.length < 4) return null;
+  return others.concat(out).sort((a, b) => b.y - a.y);
+}
+
+function looseTables(lines, pn) {
   const rowsBy = new Map();
   for (const l of lines) {
-    if (!l.text || l.text.length < 1) continue;
+    if (!l.text) continue;
     const k = Math.round(l.y / 3) * 3;
     if (!rowsBy.has(k)) rowsBy.set(k, []);
     rowsBy.get(k).push(l);
   }
   const seq = [...rowsBy.keys()].sort((a, b) => b - a).map(y => ({ y, segs:rowsBy.get(y).sort((a, b) => a.x0 - b.x0) }));
-  const usable = r => r.segs.length >= 2 && r.segs.length <= 8;
-  const out = [];
+  const out = [], taken = new Set();
+  for (let q = 0; q + 1 < seq.length; q++) {
+    const A = seq[q];
+    if (A.segs.length < 4) continue;
+    let k = q + 1;
+    const cont = [];
+    while (k < seq.length && seq[k].segs.length === 1 && seq[k].segs[0].text.length <= 20 && cont.length < 2) {
+      cont.push(seq[k]); k++;
+    }
+    const B = seq[k];
+    if (!B || A.segs.length !== B.segs.length) continue;
+    const gap = A.y - B.y;
+    if (gap <= 0 || gap > 60) continue;
+    const count = A.segs.length;
+    const prev = seq[q - 1], next = seq[k + 1];
+    if (prev && prev.segs.length === count) continue;
+    if (next && next.segs.length === count) continue;
+    const shortA = A.segs.every(x => x.text.length > 0 && x.text.length <= 40);
+    const shortB = B.segs.every(x => x.text.length > 0 && x.text.length <= 20);
+    const nums = B.segs.filter(x => /\d/.test(x.text)).length;
+    const labels = A.segs.filter(x => !/\d/.test(x.text)).length;
+    if (!shortA || !shortB || nums < Math.ceil(B.segs.length * 0.5)) continue;
+    if (labels < Math.ceil(A.segs.length * 0.8)) continue;
+    for (const row of cont) {
+      const c = row.segs[0];
+      let best = -1, bd = 1e9;
+      A.segs.forEach((x, i) => {
+        const d = Math.abs((x.x0 + x.x1) / 2 - (c.x0 + c.x1) / 2);
+        if (d < bd) { bd = d; best = i; }
+      });
+      if (best >= 0) A.segs[best] = Object.assign({}, A.segs[best], { text: clean(A.segs[best].text + ' ' + c.text) });
+    }
+    const size = Math.max(A.segs[0].size, B.segs[0].size, 10);
+    out.push({
+      rows: [A.segs.map(x => ({ text:x.text, bold:false })), B.segs.map(x => ({ text:x.text, bold:false }))],
+      header: true, ruled: false,
+      x0: Math.min(...A.segs.concat(B.segs).map(x => x.x0)),
+      x1: Math.max(...A.segs.concat(B.segs).map(x => x.x1)),
+      y0: B.y - size * 0.4,
+      y1: A.y + size * 1.25
+    });
+    taken.add(A.y); taken.add(B.y);
+    for (const row of cont) taken.add(row.y);
+  }
+  const seq2 = seq.filter(r => !taken.has(r.y));
+  seq.length = 0;
+  seq.push(...seq2);
+
   let i = 0;
   while (i < seq.length) {
-    if (!usable(seq[i])) { i++; continue; }
-    let j = i;
-    while (j < seq.length && usable(seq[j])) j++;
-    const run = seq.slice(i, j);
-    const wideRows = run.filter(r => r.segs.length >= 3).length;
-    if (run.length >= 3) {
-      const starts = [];
-      for (const r of run) for (const s of r.segs) starts.push(s.x0);
-      starts.sort((a, b) => a - b);
-      const cols = [];
-      for (const x of starts) {
-        const c = cols[cols.length - 1];
-        if (c && x - c.last <= 8) { c.last = x; c.n++; }
-        else cols.push({ last:x, x0:x, n:1 });
-      }
-      const solid = cols.filter(c => c.n >= Math.max(2, Math.ceil(run.length * 0.7)));
-      const lens = run.reduce((a, r) => a.concat(r.segs.map(s => s.text.length)), []).sort((a, b) => a - b);
-      const median = lens[Math.floor(lens.length / 2)] || 0;
-      const maxLen = lens[lens.length - 1] || 0;
-      const twoCol = solid.length === 2;
-      const okShape = solid.length >= 3
-        ? (median <= 45 && maxLen <= 100 && wideRows >= Math.ceil(run.length * 0.8))
-        : (twoCol && median <= 30 && maxLen <= 60 && run.length >= 3);
-      if (solid.length >= 2 && okShape) {
-        const xs = solid.map(c => c.x0).sort((a, b) => a - b);
-        const rows0 = run.map(r => {
-          const cells = xs.map(() => '');
-          for (const s of r.segs) {
-            let best = 0, bd = 1e9;
-            xs.forEach((x, ci) => { const d = Math.abs(s.x0 - x); if (d < bd) { bd = d; best = ci; } });
-            cells[best] = clean((cells[best] ? cells[best] + ' ' : '') + s.text);
-          }
-          return cells;
-        });
-        const cols_n = rows0.length ? rows0[0].length : 0;
-        const filled = rows0.reduce((a, r) => a + r.filter(t => t).length, 0);
-        if (!cols_n || filled < rows0.length * cols_n * 0.45) { i = j; continue; }
-        const colFill = [];
-        for (let c = 0; c < cols_n; c++) colFill.push(rows0.filter(r => r[c]).length);
-        const half = Math.ceil(rows0.length * 0.5);
-        if (colFill.some(n => n < half) || colFill[0] < Math.ceil(rows0.length * 0.6)) { i = j; continue; }
-        if (twoCol) {
-          if (rows0.length < 3 || colFill.some(n => n < Math.ceil(rows0.length * 0.7))) { i = j; continue; }
-          if (Math.max(...rows0.map(r => (r[0] || '').length)) > 40) { i = j; continue; }
-        }
-        const gaps = [];
-        for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
-        if (gaps.length) {
-          const gs = gaps.slice().sort((x, y) => x - y), med = gs[gs.length >> 1] || 0;
-          if (!med || Math.max(...gaps) > med * 2.5 || Math.min(...gaps) < med * 0.4) { i = j; continue; }
-        }
-        const rows = rows0.map(r => r.map(t => ({ text:t, bold:false })));
-        const maxSize = Math.max(...run[0].segs.map(s => s.size), 10);
-        out.push({
-          rows, header:true, ruled:false,
-          x0: Math.min(...run.flatMap(r => r.segs.map(s => s.x0))),
-          x1: Math.max(...run.flatMap(r => r.segs.map(s => s.x1))),
-          y0: run[run.length - 1].y - maxSize * 0.4,
-          y1: run[0].y + maxSize * 1.25
-        });
-        i = j;
-        continue;
-      }
+    if (seq[i].segs.length < 2) { i++; continue; }
+    let end = i + 1;
+    while (end < seq.length) {
+      const r = seq[end], prev = seq[end - 1];
+      const gap = prev.y - r.y;
+      if (gap <= 0) break;
+      const tall = Math.max(prev.segs[0].size, r.segs[0].size);
+      if (gap > tall * 2.4) break;
+      if (r.segs.length === 1 && Math.max(...r.segs.map(x => x.text.length)) > 45) break;
+      if (r.segs.length > 10) break;
+      end++;
+      if (end - i > 40) break;
     }
-    i = j > i ? j : i + 1;
+    const run = seq.slice(i, end);
+    i = end;
+
+    /* drop a caption line above the table and footnote lines below it */
+    while (run.length && run[0].segs.length === 1) {
+      const t = run[0].segs[0].text;
+      if (t.length > 40 || /^(table|figure|box)\b/i.test(t)) run.shift();
+      else break;
+    }
+    while (run.length && run[run.length - 1].segs.length <= 2 &&
+           Math.max(...run[run.length - 1].segs.map(s => s.text.length)) > 110) run.pop();
+    if (run.length < 2) continue;
+
+    const starts = [];
+    for (const r of run) for (const s of r.segs) starts.push(s.x0);
+    starts.sort((a, b) => a - b);
+    const cols = [];
+    for (const x of starts) {
+      const c = cols[cols.length - 1];
+      if (c && x - c.last <= 12) { c.last = x; c.n++; }
+      else cols.push({ last:x, x0:x, n:1 });
+    }
+    const need = Math.max(2, Math.ceil(run.length * 0.7));
+    const solid = cols.filter(c => c.n >= need);
+    if (solid.length < 2) continue;
+    const xs = solid.map(c => c.x0).sort((a, b) => a - b);
+
+    const rows0 = run.map(r => {
+      const cells = xs.map(() => '');
+      for (const s of r.segs) {
+        let best = 0, bd = 1e9;
+        xs.forEach((x, ci) => { const d = Math.abs(s.x0 - x); if (d < bd) { bd = d; best = ci; } });
+        cells[best] = clean((cells[best] ? cells[best] + ' ' : '') + s.text);
+      }
+      return cells;
+    });
+
+    let nr = rows0.length, nc = xs.length;
+    {
+      const gs2 = [];
+      for (let q = 1; q < run.length; q++) gs2.push(run[q - 1].y - run[q].y);
+      gs2.sort((x, y) => x - y);
+      const medGap = gs2[gs2.length >> 1] || 0;
+      if (medGap) {
+        for (let q = 1; q < rows0.length; q++) {
+          const cur = rows0[q], up = rows0[q - 1];
+          const smallGap = run[q - 1].y - run[q].y < medGap * 0.7;
+          const headerish = q === 1 && cur.filter(t => !t).length >= nc * 0.4;
+          if (!smallGap && !headerish) continue;
+          let ok = true, any = false;
+          cur.forEach((t, c) => {
+            if (!t) return;
+            any = true;
+            if (!up[c]) ok = false;
+          });
+          if (ok && any) {
+            cur.forEach((t, c) => { if (t) up[c] = clean(up[c] + ' ' + t); });
+            rows0.splice(q, 1);
+            run.splice(q, 1);
+            q--;
+          }
+        }
+      }
+      nr = rows0.length;
+    }
+    const lens = [];
+    for (const r of rows0) for (const t of r) if (t) lens.push(t.length);
+    lens.sort((a, b) => a - b);
+    const filled = lens.length, cells = nr * nc;
+    const median = lens[Math.floor(lens.length / 2)] || 0;
+    const long = lens.filter(n => n > 100).length;
+    if (filled < cells * 0.5 || median > 45 || long > cells * 0.15) continue;
+    if (rows0.some(r => r.some(t => (t.match(/\b\d+(?:[.,]\d+)?\b/g) || []).length >= 4))) continue;
+    if (nc < 2 || (nr < 3 && nc < 4)) continue;
+
+    const colFill = [];
+    for (let c = 0; c < nc; c++) colFill.push(rows0.filter(r => r[c]).length);
+    if (colFill.some(n => n < Math.ceil(nr * 0.5))) continue;
+    if (colFill[0] < Math.ceil(nr * 0.6)) continue;
+    if (nc === 2) {
+      if (nr < 3 || median > 30) continue;
+      if (colFill.some(n => n < Math.ceil(nr * 0.7))) continue;
+      if (Math.max(...rows0.map(r => (r[0] || '').length)) > 40) continue;
+      const numeric = rows0.filter(r => /\d/.test(r[1] || '')).length;
+      if (numeric < Math.ceil(nr * 0.4)) continue;
+    }
+    const gaps = [];
+    for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
+    if (gaps.length) {
+      const gs = gaps.slice().sort((x, y) => x - y), med = gs[gs.length >> 1] || 0;
+      if (!med || Math.max(...gaps) > med * 2.6 || Math.min(...gaps) < med * 0.35) continue;
+    }
+    const maxSize = Math.max(...run[0].segs.map(s => s.size), 10);
+    out.push({
+      rows: rows0.map(r => r.map(t => ({ text:t, bold:false }))),
+      header: true, ruled: false,
+      x0: Math.min(...run.flatMap(r => r.segs.map(s => s.x0))),
+      x1: Math.max(...run.flatMap(r => r.segs.map(s => s.x1))),
+      y0: run[run.length - 1].y - maxSize * 0.4,
+      y1: run[0].y + maxSize * 1.25
+    });
   }
   return out;
 }
 
 function buildTables(p) {
+  const gone = (p.lines || []).filter(l => l.gone);
+  const usable = gone.length ? p.items.filter(it => !gone.some(l =>
+    it.y > l.y - l.size * 0.5 && it.y < l.y + l.size * 1.2 &&
+    it.x + (it.w || 0) / 2 > l.x0 - 2 && it.x + (it.w || 0) / 2 < l.x1 + 2
+  )) : p.items;
   let tabs = [];
   if (p.segs && p.segs.length) {
     for (const t of ruledTables(p.segs)) {
-      const tt = tableFromGrid(t, p.items);
+      const tt = tableFromGrid(t, usable);
       if (tt) tabs.push(tt);
     }
   }
-  if (!tabs.length) tabs = looseTables(p.lines || []);
-  if (!tabs.length) return [];
-  const keep = [], keptItems = [];
-  for (const it of p.items) {
-    let inside = false;
-    for (const t of tabs) {
-      const cx = it.x + (it.w || 0) / 2, cy = it.y + it.fs * 0.3;
-      if (cx > t.x0 - 1 && cx < t.x1 + 1 && cy > t.y0 - 1 && cy < t.y1 + 1) { inside = true; break; }
-    }
-    if (!inside) keptItems.push(it);
-  }
-  p.items = keptItems;
+  if (!tabs.length) tabs = looseTables((p.lines || []).filter(l => !l.gone), p.n);
   return tabs;
+}
+
+function applyTables(p) {
+  const tabs = p.tableCand || [];
+  if (!tabs.length) return false;
+  const gone = (p.lines || []).filter(l => l.gone);
+  const kept = [];
+  for (const it of p.items) {
+    const cx = it.x + (it.w || 0) / 2, cy = it.y + it.fs * 0.3;
+    let drop = false;
+    for (const t of tabs) {
+      if (cx > t.x0 - 1 && cx < t.x1 + 1 && cy > t.y0 - 1 && cy < t.y1 + 1) { drop = true; break; }
+    }
+    if (!drop) for (const l of gone) {
+      if (it.y > l.y - l.size * 0.5 && it.y < l.y + l.size * 1.2 &&
+          cx > l.x0 - 2 && cx < l.x1 + 2) { drop = true; break; }
+    }
+    if (!drop) kept.push(it);
+  }
+  p.items = kept;
+  p.tables = tabs;
+  p.lines = buildLines(p);
+  return true;
 }
 
 /* ---- pictures: find real drawings, skip backgrounds and rules ---- */
@@ -2792,7 +2934,13 @@ async function visualFigures(p) {
     comps.push({ x0, y0, x1, y1, count });
   }
 
-  let boxes = comps.filter(b => (b.x1 - b.x0) >= 8 && (b.y1 - b.y0) >= 6 && b.count >= 24);
+  let boxes = comps.filter(b => {
+    const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+    if (bw < 8 || bh < 6 || b.count < 24) return false;
+    if (bw > dw * 0.3 && bh < dh * 0.05) return false;
+    if (bh > dh * 0.3 && bw < dw * 0.05) return false;
+    return true;
+  });
   const gap = 9;
   let merged = true;
   while (merged) {
@@ -2808,6 +2956,19 @@ async function visualFigures(p) {
     }
   }
 
+  const flatPanel = b => {
+    const w = b.x1 - b.x0, h = b.y1 - b.y0;
+    if (w * h < dw * dh * 0.002) return false;
+    let sum = 0, sum2 = 0, n = 0;
+    for (let y = b.y0; y <= b.y1; y += 3) for (let x = b.x0; x <= b.x1; x += 3) {
+      const i = (y * dw + x) * 4;
+      const l = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      sum += l; sum2 += l * l; n++;
+    }
+    if (n < 20) return false;
+    const mean = sum / n;
+    return Math.sqrt(Math.max(0, sum2 / n - mean * mean)) < 9;
+  };
   const pageArea = p.w * p.h;
   const minArea = p.rawChars < 300 ? 0.008 : 0.012;
   const maxArea = p.rawChars < 300 ? 0.85 : 0.55;
@@ -2830,8 +2991,10 @@ async function visualFigures(p) {
     let yTop = p.h - b.y0 / sy, yBot = p.h - b.y1 / sy;
     if (x1 - x0 < 16 || yTop - yBot < 10) continue;
     if (yBot > p.h * 0.92 || yTop < p.h * 0.08) continue;
+    if (flatPanel(b)) continue;
     let clashes = false;
-    for (const t of (p.tables || [])) {
+    const strongTabs = (p.tableCand || []).filter(t => t.ruled || (t.rows.length >= 3 && (t.rows[0] || []).length >= 3));
+    for (const t of strongTabs) {
       const ox = Math.max(0, Math.min(x1, t.x1) - Math.max(x0, t.x0));
       const oy = Math.max(0, Math.min(yTop, t.y1) - Math.max(yBot, t.y0));
       if (ox * oy > (x1 - x0) * (yTop - yBot) * 0.4) { clashes = true; break; }
@@ -2839,14 +3002,17 @@ async function visualFigures(p) {
     if (clashes) continue;
     const medSize = p.lines.length ? p.lines.map(l => l.size).sort((a, b) => a - b)[p.lines.length >> 1] : 11;
     const absorbed = [];
+    const inTable = l => (p.tableCand || []).some(t =>
+      l.x0 > t.x0 - 2 && l.x1 < t.x1 + 2 && l.y > t.y0 - 2 && l.y < t.y1 + 2);
     for (const l of p.lines) {
-      if (l.gone || l.text.length > 60) continue;
+      if (l.gone || l.text.length > 60 || inTable(l)) continue;
       if (/^(fig(ure)?|table|plate|map|chart|illustration|source)\b/i.test(l.text)) continue;
       if (l.x0 < x0 - 4 || l.x1 > x1 + 4) continue;
       if (l.y + l.size * 0.4 > yTop + medSize * 1.8) continue;
       if (l.y - l.size * 0.3 < yBot - medSize * 2.6) continue;
       absorbed.push(l);
     }
+    if (absorbed.length > 6 || absorbed.reduce((a, l) => a + l.text.length, 0) > 260) absorbed.length = 0;
     if (absorbed.length) {
       x0 = Math.min(x0, ...absorbed.map(l => l.x0));
       x1 = Math.max(x1, ...absorbed.map(l => l.x1));
@@ -2897,7 +3063,7 @@ function cropCanvas(src, b, pad) {
 /* ---- structure ---- */
 const runsHtml = runs => runs.map(r => {
   let t = esc(r.t.replace(/\s+/g, ' '));
-  if (!t.trim()) return '';
+  if (!t.trim()) return t ? ' ' : '';
   if (r.b) t = '<strong>' + t + '</strong>';
   if (r.i) t = '<em>' + t + '</em>';
   return t;
@@ -3058,13 +3224,27 @@ async function convert() {
       let opList = null;
       if (needOp) { try { opList = await page.getOperatorList(); } catch (e) {} }
       const tc = await page.getTextContent();
-      const items = [];
+      const raw = [];
       for (const it of tc.items) {
         if (!('str' in it) || !it.str || !it.str.trim()) continue;
         const tr = it.transform || [1, 0, 0, 1, 0, 0];
+        const ang = Math.atan2(tr[1], tr[0]) * 180 / Math.PI;
+        if (Math.abs(Math.abs(ang) - 90) < 20 && vp.rotation % 180 === 0) continue;
         const fs = Math.hypot(tr[2], tr[3]) || it.height || 10;
         const f = fontStyle(page, it.fontName);
-        items.push({ s:it.str, x:tr[4], y:tr[5], w:it.width || 0, fs, bold:f.bold, italic:f.italic });
+        raw.push({ s:it.str, x:tr[4], y:tr[5], w:it.width || 0, fs, bold:f.bold, italic:f.italic });
+      }
+      const seenText = new Map(), items = [];
+      for (const it of raw) {
+        const prev = seenText.get(it.s) || [];
+        let dup = false;
+        for (const q of prev) {
+          if (Math.abs(q.x - it.x) < it.fs * 0.8 && Math.abs(q.y - it.y) < it.fs * 1.4) { dup = true; break; }
+        }
+        if (dup) continue;
+        if (prev.length < 6) prev.push(it);
+        seenText.set(it.s, prev);
+        items.push(it);
       }
       const pg = { n, w:vp.width, h:vp.height, items, vp, page, lines:null };
       pg.rawChars = items.reduce((a, i) => a + i.s.trim().length, 0);
@@ -3137,12 +3317,18 @@ async function convert() {
       if (worker) { try { await worker.terminate(); } catch (e) {} }
     }
 
-    /* tables: find them before the text flow is stitched together */
+    /* pages that are lists of titles with page numbers */
     for (const p of pages) {
       if (!p.lines) p.lines = buildLines(p);
       if (p.ocr || p.blank || p.rawChars < 40) continue;
-      const tabs = buildTables(p);
-      if (tabs.length) { p.tables = tabs; p.lines = buildLines(p); }
+      const toc = tocLines(p);
+      if (toc) { p.toc = true; p.lines = toc; }
+    }
+
+    /* table candidates are known before pictures, so pictures cannot eat them */
+    for (const p of pages) {
+      if (p.ocr || p.blank || p.toc || p.rawChars < 40) continue;
+      try { p.tableCand = buildTables(p); } catch (e) { p.tableCand = []; }
     }
 
     /* body size */
@@ -3200,7 +3386,7 @@ async function convert() {
 
     /* drawings, charts and figures on text pages */
     if (keepPics) {
-      const gfx = pages.filter(p => !p.ocr && !p.blank && p.rawChars >= 20 && p.gfx && !(p.vp && p.vp.rotation % 360));
+      const gfx = pages.filter(p => !p.ocr && !p.blank && !p.toc && p.rawChars >= 20 && p.gfx && !(p.vp && p.vp.rotation % 360));
       for (let k = 0; k < gfx.length; k++) {
         const p = gfx[k];
         if (STOP.cancel) throw new Error('Stopped.');
@@ -3255,6 +3441,12 @@ async function convert() {
       if (left.length + right.length < main.length * 0.9) return null;
       return [{ lines: full }, { lines: left }, { lines: right }];
     };
+
+    /* tables: read cell by cell, without their text leaking into the flow */
+    for (const p of pages) {
+      if (p.ocr || p.blank || p.toc || p.rawChars < 40) continue;
+      try { applyTables(p); } catch (e) {}
+    }
 
     /* blocks */
     const blocks = [];
@@ -3343,7 +3535,13 @@ async function convert() {
           const vy = p.vp.convertToViewportPoint(0, l.y)[1];
           while (fi < mine.length && mine[fi].top <= vy) addMark(mine[fi++]);
           l.pg = p.n;
-          const lvl = heading(l, bnd.left, bnd.right);
+          const lvl = l.toc ? 0 : heading(l, bnd.left, bnd.right);
+          if (l.toc) {
+            pushPara();
+            blocks.push({ type:'p', runs:l.runs, text:l.text, pg:p.n, toc:true });
+            prev = { l, p:p.n };
+            continue;
+          }
           if (lvl) {
             const pb = blocks[blocks.length - 1], type = lvl === 1 ? 'h1' : 'h2';
             const near = prev && prev.p === p.n && (prev.l.y - l.y) <= Math.max(prev.l.size, l.size) * 1.6;
@@ -3354,7 +3552,7 @@ async function convert() {
               mergeRuns(pb.runs, l.runs);
             } else {
               pushPara();
-              blocks.push({ type, text:l.text, runs:l.runs, pg:p.n });
+              blocks.push({ type, text:l.text, runs:l.runs, pg:p.n, y:l.y, h:p.h });
             }
             prev = { l, p:p.n };
             continue;
@@ -3403,6 +3601,10 @@ async function convert() {
     for (const b of blocks) {
       if (b.type === 'h1') {
         const t = clean(b.text) || bookTitle;
+        const sentence = t.length > 80 || /[.!?]$/.test(t);
+        const lowOnPage = b.h && b.y != null && b.y < b.h * 0.55 &&
+          !/^(\d+[.)]?\s|chapter|part|book|section|appendix|prologue|epilogue|introduction|conclusion|contents|preface|foreword|afterword)/i.test(t);
+        if ((sentence || lowOnPage) && cur) { b.type = 'h2'; cur.blocks.push(b); continue; }
         if (cur && !cur.blocks.length && !cur.subs.length) { cur.title = t; cur.blocks.push({ type:'h1', text:t }); }
         else { open(t); cur.blocks.push({ type:'h1', text:t }); }
         continue;
