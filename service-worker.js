@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'pdf-toolkit-';
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
@@ -34,6 +34,17 @@ self.addEventListener('fetch', event => {
   const isAppRequest = url.origin === self.location.origin;
   const isLibraryRequest = url.hostname === CDN_HOST && url.pathname.includes('/ajax/libs/');
   if (!isAppRequest && !isLibraryRequest) return;
+
+  if (url.pathname.endsWith('/build.json')) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith(

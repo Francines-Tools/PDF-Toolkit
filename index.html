@@ -305,7 +305,7 @@ button.danger{background:var(--danger);color:var(--ondanger)}
 <p class="note" id="rnote"></p>
 
 </div>
-<p class="note" style="text-align:center;margin-top:24px">PDF Toolkit · build 24 Oct 2026</p>
+<p class="note" style="text-align:center;margin-top:24px">PDF Toolkit · build <span id="buildStamp" title="UTC build time">202611170757</span></p>
 </main>
 <div id="errBar" class="errbar hide" role="alert" aria-live="assertive"><p id="errTxt"></p><button type="button" id="errX" aria-label="Dismiss error">Dismiss</button></div>
 <div id="newModal" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="nmT"><div class="card" style="width:min(460px,100%);margin:0"><b id="nmT">Start a new file?</b><p style="margin:8px 0 14px">You have unsaved changes. If you continue, all unsaved edits will be lost.</p><div class="tools"><button type="button" class="t g" id="nmCancel">Keep working</button><button type="button" class="t danger" id="nmGo">Discard and start new</button></div></div></div>
@@ -3962,6 +3962,11 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js').catch(() => {});
   });
 }
+fetch('./build.json', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(j => {
+  if (!j || !j.build) return;
+  const el = document.getElementById('buildStamp');
+  if (el) { el.textContent = j.build; if (j.iso) el.title = 'Built ' + j.iso; }
+}).catch(() => {});
 </script>
 </body>
 </html>

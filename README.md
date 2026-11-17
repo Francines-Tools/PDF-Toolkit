@@ -148,6 +148,7 @@ Good to know:
 - **Saved signatures** are stored in this browser only, so they won't appear on another device.
 - **Fonts and licences.** Fonts inside a PDF are usually licensed for that document only. Check the licence before installing or sharing them.
 - **Very large files** can be slow on a phone.
+- **Build code.** The footer shows a build code such as `202611170758` (UTC, yyyymmddhhmm). It is read from `build.json`, which the **Build stamp** GitHub Action refreshes on every push to `main`.
 
 ---
 

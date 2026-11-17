@@ -1,0 +1,39 @@
+name: Build stamp
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-stamp
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip build]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Write build.json
+        run: node scripts/stamp-build.mjs
+
+      - name: Commit the new stamp
+        run: |
+          git config user.name "Francine's Tools"
+          git config user.email "fremmor@gmail.com"
+          git add build.json
+          if git diff --cached --quiet; then
+            echo "Build stamp is already current."
+            exit 0
+          fi
+          git commit -m "Update build stamp [skip build]"
+          git push
