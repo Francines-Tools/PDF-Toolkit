@@ -2416,50 +2416,457 @@ const pageNumberish = t => {
   return /^[-–—.·•|]?\s*[a-z]{1,7}\s*[-–—.·•|]?$/i.test(s) && ROMAN.test(s.replace(/[^a-z]/gi, '')) && /^[ivxlcdm\s\-–—.·•|]+$/i.test(s);
 };
 
-/* ---- page figures ---- */
-function figureBoxes(p, rawList) {
-  const ol = rawList || p.opList;
-  if (!ol || !p.vp) return [];
+/* ---- vector paths, rules, tables ---- */
+const mul2 = (m, n) => [
+  m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]
+];
+
+function pathLines(args, apply) {
   const O = pdfjsLib.OPS;
-  const boxes = [];
-  let ctm = [1, 0, 0, 1, 0, 0];
-  const stack = [];
-  const mul = (m, n) => [
-    m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
-    m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
-    m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]
-  ];
-  for (let k = 0; k < ol.fnArray.length; k++) {
-    const fn = ol.fnArray[k], args = ol.argsArray[k];
-    if (fn === O.save) stack.push(ctm.slice());
-    else if (fn === O.restore) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
-    else if (fn === O.transform && args && args.length >= 6) ctm = mul(ctm, args);
-    else if (fn === O.paintImageXObject || fn === O.paintImageMaskXObject || fn === O.paintInlineImageXObject) {
-      const pts = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => [
-        ctm[0] * u + ctm[2] * v + ctm[4], ctm[1] * u + ctm[3] * v + ctm[5]
-      ]).map(([x, y]) => p.vp.convertToViewportPoint(x, y));
-      const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
-      const b = { x0:Math.min(...xs), y0:Math.min(...ys), x1:Math.max(...xs), y1:Math.max(...ys) };
-      if ((b.x1 - b.x0) * (b.y1 - b.y0) > p.w * p.h * 0.5) p._big = true;
-      if (b.x1 - b.x0 > 20 && b.y1 - b.y0 > 20) boxes.push(b);
-    }
-  }
-  const pageArea = p.w * p.h;
+  const ops = args[0] || [], co = args[1] || [];
   const out = [];
-  boxes.sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0));
-  for (const b of boxes) {
-    const area = (b.x1 - b.x0) * (b.y1 - b.y0);
-    if (area < pageArea * 0.004 || area > pageArea * 0.85) continue;
-    const clash = out.some(o => {
-      const ox = Math.max(0, Math.min(o.x1, b.x1) - Math.max(o.x0, b.x0));
-      const oy = Math.max(0, Math.min(o.y1, b.y1) - Math.max(o.y0, b.y0));
-      return ox * oy > area * 0.6;
-    });
-    if (!clash) out.push(b);
-    if (out.length >= 6) break;
+  let k = 0, cur = null, start = null;
+  const rd = () => [co[k++], co[k++]];
+  for (const op of ops) {
+    if (op === O.moveTo) { cur = rd(); start = cur; }
+    else if (op === O.lineTo) {
+      const n = rd();
+      if (cur && n) out.push([apply(cur[0], cur[1]), apply(n[0], n[1])]);
+      cur = n;
+    } else if (op === O.curveTo) { k += 6; }
+    else if (op === O.closePath) {
+      if (cur && start) out.push([apply(cur[0], cur[1]), apply(start[0], start[1])]);
+      cur = start;
+    } else if (op === O.rectangle) {
+      const x = co[k++], y = co[k++], w = co[k++], h = co[k++];
+      const q = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+      for (let i = 0; i < 4; i++) {
+        const a = q[i], b = q[(i + 1) % 4];
+        out.push([apply(a[0], a[1]), apply(b[0], b[1])]);
+      }
+      cur = q[3]; start = q[0];
+    }
   }
   return out;
 }
+
+function pathSegments(ol) {
+  if (!ol) return [];
+  const O = pdfjsLib.OPS;
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  const segs = [];
+  let pending = [];
+  const apply = (x, y) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]];
+  for (let i = 0; i < ol.fnArray.length; i++) {
+    const fn = ol.fnArray[i], a = ol.argsArray[i];
+    if (fn === O.save) stack.push(ctm.slice());
+    else if (fn === O.restore) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+    else if (fn === O.transform && a && a.length >= 6) ctm = mul2(ctm, a);
+    else if (fn === O.paintFormXObjectBegin) { stack.push(ctm.slice()); if (a && a[0]) ctm = mul2(ctm, a[0]); }
+    else if (fn === O.paintFormXObjectEnd) ctm = stack.pop() || ctm;
+    else if (fn === O.beginGroup) { stack.push(ctm.slice()); const g = a && a[0]; if (g && g.matrix) ctm = mul2(ctm, g.matrix); }
+    else if (fn === O.endGroup) ctm = stack.pop() || ctm;
+    else if (fn === O.constructPath) pending = pathLines(a, apply);
+    else if (fn === O.stroke || fn === O.fill || fn === O.eoFill || fn === O.fillStroke ||
+             fn === O.closeStroke || fn === O.closeFill || fn === O.closeFillStroke) {
+      for (const s of pending) segs.push(s);
+      pending = [];
+    } else if (fn === O.clip || fn === O.eoClip) pending = [];
+  }
+  return segs;
+}
+
+function pageHasGraphics(ol) {
+  if (!ol) return false;
+  const O = pdfjsLib.OPS;
+  let paints = 0;
+  for (const fn of ol.fnArray) {
+    if (fn === O.paintImageXObject || fn === O.paintInlineImageXObject || fn === O.paintImageMaskXObject ||
+        fn === O.paintSolidColorImageMask || fn === O.paintImageXObjectRepeat) return true;
+    if (fn === O.fill || fn === O.stroke || fn === O.eoFill || fn === O.fillStroke) paints++;
+    if (paints >= 8) return true;
+  }
+  return false;
+}
+
+function ruledTables(segs) {
+  const hs = [], vs = [];
+  for (const [a, b] of segs) {
+    const dx = Math.abs(a[0] - b[0]), dy = Math.abs(a[1] - b[1]);
+    if (dy <= 1.5 && dx >= 12) hs.push({ y:(a[1] + b[1]) / 2, x0:Math.min(a[0], b[0]), x1:Math.max(a[0], b[0]) });
+    else if (dx <= 1.5 && dy >= 12) vs.push({ x:(a[0] + b[0]) / 2, y0:Math.min(a[1], b[1]), y1:Math.max(a[1], b[1]) });
+  }
+  if (hs.length < 2 || vs.length < 2) return [];
+  const mh = [], mv = [];
+  for (const h of hs) {
+    const f = mh.find(o => Math.abs(o.y - h.y) <= 2 && h.x0 <= o.x1 + 3 && h.x1 >= o.x0 - 3);
+    if (f) { f.x0 = Math.min(f.x0, h.x0); f.x1 = Math.max(f.x1, h.x1); }
+    else mh.push({ y:h.y, x0:h.x0, x1:h.x1 });
+  }
+  for (const v of vs) {
+    const f = mv.find(o => Math.abs(o.x - v.x) <= 2 && v.y0 <= o.y1 + 3 && v.y1 >= o.y0 - 3);
+    if (f) { f.y0 = Math.min(f.y0, v.y0); f.y1 = Math.max(f.y1, v.y1); }
+    else mv.push({ x:v.x, y0:v.y0, y1:v.y1 });
+  }
+  const nodes = [];
+  mh.forEach((h, i) => mv.forEach((v, j) => {
+    if (v.x >= h.x0 - 2 && v.x <= h.x1 + 2 && h.y >= v.y0 - 2 && h.y <= v.y1 + 2) nodes.push({ h:i, v:j });
+  }));
+  if (!nodes.length) return [];
+  const parent = nodes.map((_, i) => i);
+  const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const byH = new Map(), byV = new Map();
+  nodes.forEach((n, i) => {
+    if (byH.has(n.h)) parent[find(i)] = find(byH.get(n.h)); else byH.set(n.h, i);
+    if (byV.has(n.v)) parent[find(i)] = find(byV.get(n.v)); else byV.set(n.v, i);
+  });
+  const groups = new Map();
+  nodes.forEach((n, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, { h:new Set(), v:new Set() });
+    groups.get(r).h.add(n.h);
+    groups.get(r).v.add(n.v);
+  });
+  const out = [];
+  for (const g of groups.values()) {
+    const xs = [...new Set([...g.v].map(i => Math.round(mv[i].x * 10) / 10))].sort((a, b) => a - b);
+    const ys = [...new Set([...g.h].map(i => Math.round(mh[i].y * 10) / 10))].sort((a, b) => b - a);
+    if (xs.length < 3 || ys.length < 2) continue;
+    const x0 = xs[0], x1 = xs[xs.length - 1], y0 = ys[ys.length - 1], y1 = ys[0];
+    if (x1 - x0 < 40 || y1 - y0 < 18) continue;
+    const vFull = [...g.v].filter(i => mv[i].y1 >= y1 - 2 && mv[i].y0 <= y0 + 2).length;
+    const hFull = [...g.h].filter(i => mh[i].x0 <= x0 + 2 && mh[i].x1 >= x1 - 2).length;
+    if (vFull < g.v.size * 0.7 || hFull < g.h.size * 0.7) continue;
+    out.push({ kind:'ruled', xs, ys, x0, x1, y0, y1 });
+  }
+  return out;
+}
+
+function joinCellItems(items) {
+  const its = items.slice().sort((a, b) => (b.y - a.y) || (a.x - b.x));
+  let out = '', prev = null;
+  for (const it of its) {
+    const t = clean(it.s);
+    if (!t) continue;
+    if (prev) {
+      const sameLine = Math.abs(prev.y - it.y) < Math.max(prev.fs, it.fs) * 0.5;
+      if (sameLine) {
+        const gap = it.x - (prev.x + (prev.w || 0));
+        if (gap > it.fs * 0.15 && !/\s$/.test(out)) out += ' ';
+      } else if (/[\u00ad-]$/.test(out) && /^[\p{Ll}]/u.test(t)) {
+        out = out.replace(/[\u00ad-]$/, '');
+      } else if (out && !/\s$/.test(out)) out += ' ';
+    }
+    out += t;
+    prev = it;
+  }
+  return clean(out);
+}
+
+function tableFromGrid(t, items) {
+  const xs = t.xs, ys = t.ys, rows = [];
+  let headerCells = 0, headerBold = 0;
+  for (let r = 0; r < ys.length - 1; r++) {
+    const yTop = ys[r], yBot = ys[r + 1], row = [];
+    for (let c = 0; c < xs.length - 1; c++) {
+      const x0 = xs[c], x1 = xs[c + 1];
+      if (x1 - x0 < 8) { row.push({ text:'', bold:false }); continue; }
+      const its = items.filter(it => {
+        const cx = it.x + (it.w || 0) / 2, cy = it.y + it.fs * 0.3;
+        return cx > x0 + 1 && cx < x1 - 1 && cy < yTop - 1 && cy > yBot + 1;
+      });
+      const text = joinCellItems(its);
+      const bold = its.length > 0 && its.filter(i => i.bold).length * 2 >= its.length;
+      if (r === 0) { headerCells++; if (bold) headerBold++; }
+      row.push({ text, bold });
+    }
+    rows.push(row);
+  }
+  const nc = Math.max(1, xs.length - 1), nr = Math.max(1, rows.length);
+  const filled = rows.reduce((a, r) => a + r.filter(c => c.text).length, 0);
+  if (filled < 4 || filled < nr * nc * 0.5) return null;
+  const colFill = [];
+  for (let c = 0; c < nc; c++) colFill.push(rows.filter(r => r[c].text).length);
+  if (colFill.filter(n => n >= Math.ceil(nr * 0.35)).length < Math.max(2, nc - 1)) return null;
+  const firstRow = rows[0].filter(c => c.text).length;
+  const firstCol = rows.filter(r => r[0].text).length;
+  if (firstRow < nc * 0.5 && firstCol < nr * 0.5) return null;
+  return { rows, header: headerCells > 0 && headerBold * 2 >= headerCells, ruled:true, x0:t.x0, x1:t.x1, y0:t.y0, y1:t.y1 };
+}
+
+function looseTables(lines) {
+  const rowsBy = new Map();
+  for (const l of lines) {
+    if (!l.text || l.text.length < 1) continue;
+    const k = Math.round(l.y / 3) * 3;
+    if (!rowsBy.has(k)) rowsBy.set(k, []);
+    rowsBy.get(k).push(l);
+  }
+  const seq = [...rowsBy.keys()].sort((a, b) => b - a).map(y => ({ y, segs:rowsBy.get(y).sort((a, b) => a.x0 - b.x0) }));
+  const usable = r => r.segs.length >= 2 && r.segs.length <= 8;
+  const out = [];
+  let i = 0;
+  while (i < seq.length) {
+    if (!usable(seq[i])) { i++; continue; }
+    let j = i;
+    while (j < seq.length && usable(seq[j])) j++;
+    const run = seq.slice(i, j);
+    const wideRows = run.filter(r => r.segs.length >= 3).length;
+    if (run.length >= 3 && wideRows >= Math.max(2, Math.ceil(run.length * 0.6))) {
+      const starts = [];
+      for (const r of run) for (const s of r.segs) starts.push(s.x0);
+      starts.sort((a, b) => a - b);
+      const cols = [];
+      for (const x of starts) {
+        const c = cols[cols.length - 1];
+        if (c && x - c.last <= 8) { c.last = x; c.n++; }
+        else cols.push({ last:x, x0:x, n:1 });
+      }
+      const solid = cols.filter(c => c.n >= Math.max(2, Math.ceil(run.length * 0.7)));
+      const lens = run.reduce((a, r) => a.concat(r.segs.map(s => s.text.length)), []).sort((a, b) => a - b);
+      const median = lens[Math.floor(lens.length / 2)] || 0;
+      const maxLen = lens[lens.length - 1] || 0;
+      if (solid.length >= 3 && median <= 26 && maxLen <= 48 && wideRows >= Math.ceil(run.length * 0.8)) {
+        const xs = solid.map(c => c.x0).sort((a, b) => a - b);
+        const rows0 = run.map(r => {
+          const cells = xs.map(() => '');
+          for (const s of r.segs) {
+            let best = 0, bd = 1e9;
+            xs.forEach((x, ci) => { const d = Math.abs(s.x0 - x); if (d < bd) { bd = d; best = ci; } });
+            cells[best] = clean((cells[best] ? cells[best] + ' ' : '') + s.text);
+          }
+          return cells;
+        });
+        const cols_n = rows0.length ? rows0[0].length : 0;
+        const filled = rows0.reduce((a, r) => a + r.filter(t => t).length, 0);
+        if (!cols_n || filled < rows0.length * cols_n * 0.45) { i = j; continue; }
+        const colFill = [];
+        for (let c = 0; c < cols_n; c++) colFill.push(rows0.filter(r => r[c]).length);
+        const half = Math.ceil(rows0.length * 0.5);
+        if (colFill.some(n => n < half) || colFill[0] < Math.ceil(rows0.length * 0.6)) { i = j; continue; }
+        const gaps = [];
+        for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
+        if (gaps.length) {
+          const gs = gaps.slice().sort((x, y) => x - y), med = gs[gs.length >> 1] || 0;
+          if (!med || Math.max(...gaps) > med * 2.5 || Math.min(...gaps) < med * 0.4) { i = j; continue; }
+        }
+        const rows = rows0.map(r => r.map(t => ({ text:t, bold:false })));
+        const maxSize = Math.max(...run[0].segs.map(s => s.size), 10);
+        out.push({
+          rows, header:true, ruled:false,
+          x0: Math.min(...run.flatMap(r => r.segs.map(s => s.x0))),
+          x1: Math.max(...run.flatMap(r => r.segs.map(s => s.x1))),
+          y0: run[run.length - 1].y - maxSize * 0.4,
+          y1: run[0].y + maxSize * 1.25
+        });
+        i = j;
+        continue;
+      }
+    }
+    i = j > i ? j : i + 1;
+  }
+  return out;
+}
+
+function buildTables(p) {
+  let tabs = [];
+  if (p.segs && p.segs.length) {
+    for (const t of ruledTables(p.segs)) {
+      const tt = tableFromGrid(t, p.items);
+      if (tt) tabs.push(tt);
+    }
+  }
+  if (!tabs.length) tabs = looseTables(p.lines || []);
+  if (!tabs.length) return [];
+  const keep = [], keptItems = [];
+  for (const it of p.items) {
+    let inside = false;
+    for (const t of tabs) {
+      const cx = it.x + (it.w || 0) / 2, cy = it.y + it.fs * 0.3;
+      if (cx > t.x0 - 1 && cx < t.x1 + 1 && cy > t.y0 - 1 && cy < t.y1 + 1) { inside = true; break; }
+    }
+    if (!inside) keptItems.push(it);
+  }
+  p.items = keptItems;
+  return tabs;
+}
+
+/* ---- pictures: find real drawings, skip backgrounds and rules ---- */
+function dilateMask(mask, w, h, r) {
+  const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!mask[y * w + x]) continue;
+    for (let dx = -r; dx <= r; dx++) { const nx = x + dx; if (nx >= 0 && nx < w) tmp[y * w + nx] = 1; }
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!tmp[y * w + x]) continue;
+    for (let dy = -r; dy <= r; dy++) { const ny = y + dy; if (ny >= 0 && ny < h) out[ny * w + x] = 1; }
+  }
+  return out;
+}
+
+async function visualFigures(p) {
+  const scale = Math.min(2.2, Math.max(1.1, 1400 / Math.max(p.w, p.h)));
+  const vp = p.page.getViewport({ scale });
+  const c = mkCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  try { await p.page.render({ canvasContext:ctx, viewport:vp }).promise; } catch (e) { return []; }
+
+  const dw = 420, dh = Math.max(1, Math.round(c.height * dw / c.width));
+  const dc = mkCanvas(dw, dh), dctx = dc.getContext('2d');
+  dctx.fillStyle = '#fff'; dctx.fillRect(0, 0, dw, dh);
+  dctx.drawImage(c, 0, 0, dw, dh);
+  let data;
+  try { data = dctx.getImageData(0, 0, dw, dh).data; } catch (e) { return []; }
+
+  const tally = new Map();
+  const edgePx = [];
+  for (let x = 0; x < dw; x += 3) { edgePx.push([x, 0], [x, dh - 1]); }
+  for (let y = 0; y < dh; y += 3) { edgePx.push([0, y], [dw - 1, y]); }
+  for (const [x, y] of edgePx) {
+    const i = (y * dw + x) * 4;
+    const q = (data[i] >> 4) + ',' + (data[i + 1] >> 4) + ',' + (data[i + 2] >> 4);
+    tally.set(q, (tally.get(q) || 0) + 1);
+  }
+  let bgKey = '', bgN = 0;
+  for (const [k, n] of tally) if (n > bgN) { bgN = n; bgKey = k; }
+  let bg = null;
+  if (bgN > edgePx.length * 0.35) {
+    const parts = bgKey.split(',').map(v => Number(v) * 16 + 8);
+    bg = parts;
+  }
+  const mask = new Uint8Array(dw * dh);
+  for (let i = 0; i < dw * dh; i++) {
+    const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+    const nearBg = bg && Math.abs(r - bg[0]) < 26 && Math.abs(g - bg[1]) < 26 && Math.abs(b - bg[2]) < 26;
+    if (!nearBg && (r < 236 || g < 236 || b < 236)) mask[i] = 1;
+  }
+  const sx = dw / p.w, sy = dh / p.h;
+  for (const l of p.lines) {
+    const x0 = Math.floor(l.x0 * sx) - 3, x1 = Math.ceil(l.x1 * sx) + 3;
+    const yT = Math.floor(dh - (l.y + l.size * 1.08) * sy) - 2;
+    const yB = Math.ceil(dh - (l.y - l.size * 0.36) * sy) + 2;
+    for (let y = Math.max(0, yT); y < Math.min(dh, yB); y++)
+      for (let x = Math.max(0, x0); x < Math.min(dw, x1); x++) mask[y * dw + x] = 0;
+  }
+  const m = dilateMask(mask, dw, dh, 2);
+
+  const label = new Int32Array(dw * dh);
+  const comps = [];
+  let next = 0;
+  for (let i = 0; i < dw * dh; i++) {
+    if (!m[i] || label[i]) continue;
+    next++;
+    const stack = [i];
+    label[i] = next;
+    let x0 = dw, y0 = dh, x1 = 0, y1 = 0, count = 0;
+    while (stack.length) {
+      const q = stack.pop();
+      const x = q % dw, y = (q / dw) | 0;
+      count++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= dw || ny >= dh) continue;
+        const k = ny * dw + nx;
+        if (m[k] && !label[k]) { label[k] = next; stack.push(k); }
+      }
+    }
+    comps.push({ x0, y0, x1, y1, count });
+  }
+
+  let boxes = comps.filter(b => (b.x1 - b.x0) >= 8 && (b.y1 - b.y0) >= 6 && b.count >= 24);
+  const gap = 9;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      if (a.x0 - gap <= b.x1 && b.x0 - gap <= a.x1 && a.y0 - gap <= b.y1 && b.y0 - gap <= a.y1) {
+        boxes[i] = { x0:Math.min(a.x0, b.x0), y0:Math.min(a.y0, b.y0), x1:Math.max(a.x1, b.x1), y1:Math.max(a.y1, b.y1), count:a.count + b.count };
+        boxes.splice(j, 1);
+        merged = true;
+        break outer;
+      }
+    }
+  }
+
+  const pageArea = p.w * p.h;
+  const minArea = p.rawChars < 300 ? 0.008 : 0.012;
+  const maxArea = p.rawChars < 300 ? 0.85 : 0.55;
+  const pagePxW = dw, pagePxH = dh;
+  const figs = [];
+  for (const b of boxes) {
+    const w = b.x1 - b.x0, h = b.y1 - b.y0;
+    if (w < 10 || h < 7) continue;
+    const area = (w * h) / (pagePxW * pagePxH);
+    if (area < minArea || area > maxArea) continue;
+    const density = b.count / Math.max(1, w * h);
+    if (density < 0.02) continue;
+    const pxArea = w * h;
+    if (pxArea > pagePxW * pagePxH * 0.2) {
+      const edges = (b.x0 <= 1 ? 1 : 0) + (b.x1 >= pagePxW - 2 ? 1 : 0) + (b.y0 <= 1 ? 1 : 0) + (b.y1 >= pagePxH - 2 ? 1 : 0);
+      if (edges >= 2) continue;
+    }
+    if (weirdBand(b, pagePxW, pagePxH)) continue;
+    let x0 = b.x0 / sx, x1 = b.x1 / sx;
+    let yTop = p.h - b.y0 / sy, yBot = p.h - b.y1 / sy;
+    if (x1 - x0 < 16 || yTop - yBot < 10) continue;
+    if (yBot > p.h * 0.92 || yTop < p.h * 0.08) continue;
+    let clashes = false;
+    for (const t of (p.tables || [])) {
+      const ox = Math.max(0, Math.min(x1, t.x1) - Math.max(x0, t.x0));
+      const oy = Math.max(0, Math.min(yTop, t.y1) - Math.max(yBot, t.y0));
+      if (ox * oy > (x1 - x0) * (yTop - yBot) * 0.4) { clashes = true; break; }
+    }
+    if (clashes) continue;
+    const medSize = p.lines.length ? p.lines.map(l => l.size).sort((a, b) => a - b)[p.lines.length >> 1] : 11;
+    const absorbed = [];
+    for (const l of p.lines) {
+      if (l.gone || l.text.length > 60) continue;
+      if (/^(fig(ure)?|table|plate|map|chart|illustration|source)\b/i.test(l.text)) continue;
+      if (l.x0 < x0 - 4 || l.x1 > x1 + 4) continue;
+      if (l.y + l.size * 0.4 > yTop + medSize * 1.8) continue;
+      if (l.y - l.size * 0.3 < yBot - medSize * 2.6) continue;
+      absorbed.push(l);
+    }
+    if (absorbed.length) {
+      x0 = Math.min(x0, ...absorbed.map(l => l.x0));
+      x1 = Math.max(x1, ...absorbed.map(l => l.x1));
+      yTop = Math.max(yTop, ...absorbed.map(l => l.y + l.size));
+      yBot = Math.min(yBot, ...absorbed.map(l => l.y - l.size * 0.4));
+      for (const l of absorbed) l.gone = true;
+    }
+    const pad = 5 * (c.width / dw);
+    const cc = cropCanvas(c, {
+      x0: x0 * sx * (c.width / dw) - pad, y0: (p.h - yTop) * sy * (c.height / dh) - pad,
+      x1: x1 * sx * (c.width / dw) + pad, y1: (p.h - yBot) * sy * (c.height / dh) + pad
+    }, 0);
+    const blob = cc && await toJpeg(cc, 0.85);
+    if (!blob || blob.size < 3000) continue;
+    figs.push({
+      blob,
+      top: p.h - yTop,
+      cx: (x0 + x1) / 2,
+      alt: 'Figure on page ' + p.n
+    });
+    if (figs.length >= 6) break;
+  }
+  return figs;
+}
+
+function weirdBand(b, w, h) {
+  const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+  if (bh <= 3 && bw > w * 0.4) return true;
+  if (bw <= 3 && bh > h * 0.4) return true;
+  return false;
+}
+
 
 const toJpeg = (c, q) => new Promise(res => c.toBlob(b => res(b), 'image/jpeg', q));
 function cropCanvas(src, b, pad) {
@@ -2646,71 +3053,83 @@ async function convert() {
         items.push({ s:it.str, x:tr[4], y:tr[5], w:it.width || 0, fs, bold:f.bold, italic:f.italic });
       }
       const pg = { n, w:vp.width, h:vp.height, items, vp, page, lines:null };
-      if (needOp && opList) pg.boxes = figureBoxes(pg, opList);
       pg.rawChars = items.reduce((a, i) => a + i.s.trim().length, 0);
+      if (opList) {
+        pg.gfx = pageHasGraphics(opList);
+        const segs = pathSegments(opList);
+        if (segs.length) pg.segs = segs;
+      }
       pages.push(pg);
       say(`Reading page ${n} of ${doc.numPages}\u2026`);
-      bar(2 + 40 * n / doc.numPages);
+      bar(2 + 38 * n / doc.numPages);
       await tick();
     }
 
-    /* Pages that are one big picture and no text: a scan, or a plate? */
-    const scanPages = pages.filter(p => p._big && p.rawChars < 60 && !(p.vp && p.vp.rotation % 360));
-    let ocrPages = 0, ocrError = '';
-    if (useOcr && scanPages.length) {
-      let worker = null;
-      try {
-        const T = await loadTesseract();
-        const lang = ($e('ebOcrLang').value || 'eng').replace(/[^a-z_]/g, '') || 'eng';
-        say('Starting the OCR engine. The first time downloads about 15 MB\u2026');
-        bar(42);
+    /* Pages with no text are pictures: scans, plates, photos */
+    const picPages = pages.filter(p => p.rawChars < 20 && !(p.vp && p.vp.rotation % 360));
+    let ocrPages = 0, ocrError = '', worker = null;
+    try {
+      for (let k = 0; k < picPages.length; k++) {
+        if (STOP.cancel) throw new Error('Stopped.');
+        const p = picPages[k];
+        say(`Picture page ${p.n} of ${pages.length}\u2026`);
+        bar(40 + 10 * k / Math.max(1, picPages.length));
         await tick();
-        OCR.done = 0; OCR.total = scanPages.length;
-        worker = await T.createWorker(lang, 1, {
-          workerPath: OCR_WORKER,
-          corePath: OCR_CORE,
-          langPath: OCR_DATA,
-          logger: m => {
-            if (m && m.status === 'recognizing text' && typeof m.progress === 'number')
-              bar(42 + 28 * Math.min(1, (OCR.done + m.progress) / Math.max(1, OCR.total)));
+        const scale = Math.min(3, Math.max(1.2, 2200 / Math.max(p.w, p.h)));
+        let canvas = null;
+        try { canvas = await renderCanvas(p, scale); } catch (e) {}
+        if (!canvas) { p.wantImage = true; continue; }
+        const st = scanStats(canvas);
+        if (st.blank || (st.ink !== undefined && st.ink < 0.003)) { p.blank = true; canvas = null; continue; }
+        let res = null;
+        if (useOcr && st.textLike) {
+          if (!worker) {
+            const T = await loadTesseract();
+            const lang = ($e('ebOcrLang').value || 'eng').replace(/[^a-z_]/g, '') || 'eng';
+            say('Starting the OCR engine. The first time downloads about 15 MB\u2026');
+            bar(50);
+            await tick();
+            OCR.done = 0; OCR.total = Math.max(1, picPages.length);
+            worker = await T.createWorker(lang, 1, {
+              workerPath: OCR_WORKER,
+              corePath: OCR_CORE,
+              langPath: OCR_DATA,
+              logger: m => {
+                if (m && m.status === 'recognizing text' && typeof m.progress === 'number')
+                  bar(50 + 18 * Math.min(1, (OCR.done + m.progress) / Math.max(1, OCR.total)));
+              }
+            });
           }
-        });
-        for (let k = 0; k < scanPages.length; k++) {
-          if (STOP.cancel) throw new Error('Stopped.');
-          const p = scanPages[k];
-          say(`Scan ${k + 1} of ${scanPages.length} (page ${p.n})\u2026`);
-          bar(42 + 28 * k / scanPages.length);
-          await tick();
-          const scale = Math.min(3, Math.max(1.2, 2200 / Math.max(p.w, p.h)));
-          let canvas = null;
-          try { canvas = await renderCanvas(p, scale); } catch (e) {}
-          if (!canvas) { p.wantImage = true; continue; }
-          const st = scanStats(canvas);
-          let res = null;
-          if (st.textLike) { try { res = await ocrPage(worker, canvas, p, scale); } catch (e) { res = null; } }
-          if (res && res.lines.length && res.text.length >= 40) {
-            p.lines = res.lines;
-            p.ocr = true;
-            ocrPages++;
-            if (res.confidence < 62 || res.text.length < 80) p.ocrLow = true;
-            if (keepPics && (keepScanImg || p.ocrLow)) p.scanImgBlob = await shrinkJpeg(canvas);
-          } else {
-            p.wantImage = true;
-            if (keepPics) p.scanImgBlob = await shrinkJpeg(canvas);
-          }
-          OCR.done = k + 1;
-          canvas = null;
+          say(`Reading scan ${k + 1} of ${picPages.length} (page ${p.n})\u2026`);
+          try { res = await ocrPage(worker, canvas, p, scale); } catch (e) { res = null; }
         }
-      } catch (e) {
-        if (String(e && e.message) === 'Stopped.') throw e;
-        ocrError = (e && e.message) || 'OCR failed';
-        for (const p of scanPages) if (!p.ocr) p.wantImage = true;
-      } finally {
-        if (worker) { try { await worker.terminate(); } catch (e) {} }
+        if (res && res.lines.length && res.text.length >= 40) {
+          p.lines = res.lines;
+          p.ocr = true;
+          ocrPages++;
+          if (res.confidence < 62 || res.text.length < 80) p.ocrLow = true;
+          if (keepPics && (keepScanImg || p.ocrLow)) p.pageImgBlob = await shrinkJpeg(canvas);
+        } else if (keepPics) {
+          p.pageImgBlob = await shrinkJpeg(canvas, 1600, 0.8);
+        }
+        OCR.done = k + 1;
+        canvas = null;
       }
+    } catch (e) {
+      if (String(e && e.message) === 'Stopped.') throw e;
+      ocrError = (e && e.message) || 'OCR failed';
+      for (const p of picPages) if (!p.ocr) p.wantImage = true;
+    } finally {
+      if (worker) { try { await worker.terminate(); } catch (e) {} }
     }
 
-    const pageBase = (useOcr && scanPages.length) ? 70 : 42;
+    /* tables: find them before the text flow is stitched together */
+    for (const p of pages) {
+      if (!p.lines) p.lines = buildLines(p);
+      if (p.ocr || p.blank || p.rawChars < 40) continue;
+      const tabs = buildTables(p);
+      if (tabs.length) { p.tables = tabs; p.lines = buildLines(p); }
+    }
 
     /* body size */
     const hist = new Map();
@@ -2731,8 +3150,6 @@ async function convert() {
     if (!most) throw new Error(useOcr
       ? 'No text found. Every page is a picture and the OCR could not read it.'
       : 'No selectable text found. This looks like a scan: tick “Read the text with OCR”, or keep the pictures to get a page-image EPUB.');
-
-    for (const p of pages) if (!p.lines) p.lines = buildLines(p);
 
     /* running heads, feet, page numbers */
     const zone = 0.12;
@@ -2766,6 +3183,20 @@ async function convert() {
     const q = (a, f) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * f))] : 0;
     LEFT = lx.length ? q(lx, 0.1) : 0;
     RIGHT = rx.length ? q(rx, 0.92) : 600;
+
+    /* drawings, charts and figures on text pages */
+    if (keepPics) {
+      const gfx = pages.filter(p => !p.ocr && !p.blank && p.rawChars >= 20 && p.gfx && !(p.vp && p.vp.rotation % 360));
+      for (let k = 0; k < gfx.length; k++) {
+        const p = gfx[k];
+        if (STOP.cancel) throw new Error('Stopped.');
+        say(`Looking for pictures on page ${p.n}\u2026`);
+        bar(72 + 10 * k / Math.max(1, gfx.length));
+        try { p.figs = await visualFigures(p); } catch (e) { p.figs = []; }
+        await tick();
+      }
+      bar(82);
+    }
 
     const heading = (l, L, R) => {
       const t = l.text;
@@ -2837,13 +3268,12 @@ async function convert() {
 
     for (const p of pages) {
       if (STOP.cancel) throw new Error('Stopped.');
-      const content = p.lines.filter(l => l.text && !dropLine(l, p));
-      let figs = p.ocr ? [] : (p.boxes || []).slice();
-      const chars = content.join(' ').length;
-      const asImage = keepPics && !p.ocr && chars === 0 && (p._big || p.wantImage);
+      const content = p.lines.filter(l => l.text && !l.gone && !dropLine(l, p));
+      const isPicPage = p.rawChars < 20 && !p.ocr;
+      const asImage = keepPics && isPicPage && !p.blank;
       if (asImage) {
         pushPara();
-        let img = p.scanImgBlob || null;
+        let img = p.pageImgBlob || null;
         if (!img) { try { img = await renderPage(p); } catch (e) {} }
         if (img) {
           const name = 'page-' + p.n + '.jpg';
@@ -2852,51 +3282,36 @@ async function convert() {
         }
         prev = null;
         say(`Page ${p.n} of ${pages.length}\u2026`);
-        bar(70 + 20 * p.n / pages.length);
+        bar(84 + 10 * p.n / pages.length);
         await tick();
         continue;
       }
 
-      /* figures, placed after the text line they follow */
-      if (figs.length) {
-        const scale = Math.min(2.6, Math.max(1, 1500 / Math.max(p.w, p.h)));
-        const vp = p.page.getViewport({ scale });
-        const c = mkCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-        try { await p.page.render({ canvasContext:ctx, viewport:vp }).promise; } catch (e) { figs = []; }
-        const crops = figs;
-        figs = [];
-        for (const b of crops) {
-          const cc = cropCanvas(c, { x0:b.x0 * scale, y0:b.y0 * scale, x1:b.x1 * scale, y1:b.y1 * scale }, 6);
-          const blob = cc && await toJpeg(cc, 0.85);
-          if (!blob || blob.size < 4000) continue;
-          figs.push({ blob, top:b.y0, alt:'Figure on page ' + p.n });
-        }
-        figs.sort((a, b) => a.top - b.top);
-      }
-
       const runs = pageColumns(content);
       const mid = (LEFT + RIGHT) / 2;
-      for (const fg of figs) {
-        const wide = (fg.x1 - fg.x0) > (RIGHT - LEFT) * 0.5;
-        fg.col = !runs || wide ? 0 : ((fg.x0 + fg.x1) / 2 < mid ? 1 : 2);
+      const marks = [];
+      for (const t of (p.tables || [])) {
+        marks.push({ kind:'table', table:t, top:p.h - t.y1, cx:(t.x0 + t.x1) / 2, wide:(t.x1 - t.x0) > (RIGHT - LEFT) * 0.6 });
       }
+      if (keepPics) for (const f of (p.figs || [])) marks.push({ kind:'fig', fig:f, top:f.top, cx:f.cx, wide:false });
+      marks.sort((a, b) => a.top - b.top);
+      for (const m of marks) m.col = !runs || m.wide ? 0 : (m.cx < mid ? 1 : 2);
 
       for (let ci = 0; ci < (runs ? runs.length : 1); ci++) {
         const run = runs ? runs[ci] : { lines: content };
         const bnd = bounds(run.lines, LEFT, RIGHT);
-        const mine = figs.filter(x => x.col === ci).sort((a, b) => a.top - b.top);
+        const mine = marks.filter(x => x.col === ci).sort((a, b) => a.top - b.top);
         let fi = 0;
-        const addFig = x => {
+        const addMark = m => {
           pushPara();
+          if (m.kind === 'table') { blocks.push({ type:'table', table:m.table, pg:p.n }); return; }
           const name = 'fig-' + p.n + '-' + (++figSeq) + '.jpg';
-          images.push({ name, blob:x.blob, alt:x.alt });
-          blocks.push({ type:'img', img:{ name, alt:x.alt }, pg:p.n });
+          images.push({ name, blob:m.fig.blob, alt:m.fig.alt });
+          blocks.push({ type:'img', img:{ name, alt:m.fig.alt }, pg:p.n });
         };
         for (const l of run.lines) {
           const vy = p.vp.convertToViewportPoint(0, l.y)[1];
-          while (fi < mine.length && mine[fi].top <= vy) addFig(mine[fi++]);
+          while (fi < mine.length && mine[fi].top <= vy) addMark(mine[fi++]);
           l.pg = p.n;
           const lvl = heading(l, bnd.left, bnd.right);
           if (lvl) {
@@ -2927,16 +3342,16 @@ async function convert() {
           else { pushPara(); nextPara(l, p.n); }
           prev = { l, p:p.n };
         }
-        while (fi < mine.length) addFig(mine[fi++]);
+        while (fi < mine.length) addMark(mine[fi++]);
       }
       pushPara();
-      if (keepPics && p.scanImgBlob && (p.ocr ? (keepScanImg || p.ocrLow) : true)) {
+      if (keepPics && p.pageImgBlob && p.ocr && (keepScanImg || p.ocrLow)) {
         const name = 'scan-' + p.n + '.jpg';
-        images.push({ name, blob:p.scanImgBlob, alt:'Scanned page ' + p.n });
+        images.push({ name, blob:p.pageImgBlob, alt:'Scanned page ' + p.n });
         blocks.push({ type:'img', img:{ name, alt:'Scanned page ' + p.n }, pg:p.n });
       }
       say(`Page ${p.n} of ${pages.length}\u2026`);
-      bar(70 + 20 * p.n / pages.length);
+      bar(84 + 10 * p.n / pages.length);
       await tick();
     }
     pushPara();
@@ -3020,8 +3435,8 @@ async function convert() {
     $e('ebDone').classList.remove('hide');
     let extra = '';
     if (ocrError) extra = ' OCR could not run (' + ocrError + '), so its pages were kept as pictures.';
-    else if (!useOcr && scanPages.length) extra = ` ${scanPages.length} scanned page${scanPages.length === 1 ? ' was' : 's were'} kept as pictures; tick “Read the text with OCR” and convert again for their text.`;
-    else if (useOcr && scanPages.length > ocrPages) extra = ` ${scanPages.length - ocrPages} picture page${scanPages.length - ocrPages === 1 ? ' had' : 's had'} no readable text and stayed as pictures.`;
+    else if (!useOcr && picPages.length) extra = ` ${picPages.length} scanned page${picPages.length === 1 ? ' was' : 's were'} kept as pictures; tick “Read the text with OCR” and convert again for their text.`;
+    else if (useOcr && picPages.length > ocrPages) extra = ` ${picPages.length - ocrPages} picture page${picPages.length - ocrPages === 1 ? ' had' : 's had'} no readable text and stayed as pictures.`;
     $e('ebInfo').textContent = 'Ready to download as ' + resultName + '. Open it in your reader and check the chapter list.' + extra;
     bar(100); say('Done.');
   } catch (e) {
@@ -3060,6 +3475,16 @@ async function renderPage(p) {
 }
 
 /* ---- EPUB 3 ---- */
+function tableXhtml(t) {
+  const rows = (t && t.rows) || [];
+  if (!rows.length) return '';
+  const cell = (c, tag) => `<${tag}>${esc(c.text)}</${tag}>`;
+  const head = t.header && rows.length > 1 ? '<thead><tr>' + rows[0].map(c => cell(c, 'th')).join('') + '</tr></thead>' : '';
+  const body = (t.header && rows.length > 1 ? rows.slice(1) : rows)
+    .map(r => '<tr>' + r.map(c => cell(c, 'td')).join('') + '</tr>').join('');
+  return '<table>' + head + (body ? '<tbody>' + body + '</tbody>' : '') + '</table>';
+}
+
 function buildEpub(book) {
   const id = (crypto && crypto.randomUUID) ? 'urn:uuid:' + crypto.randomUUID() : 'urn:uuid:' + Date.now().toString(16) + '-0000-4000-8000-' + Math.random().toString(16).slice(2, 14);
   const stamp = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -3080,6 +3505,7 @@ ${body.html}
     const out = [];
     for (const b of c.blocks) {
       if (b.type === 'p') out.push('<p>' + runsHtml(b.runs || [{ t:b.text }]) + '</p>');
+      else if (b.type === 'table') out.push(tableXhtml(b.table));
       else if (b.type === 'img') out.push(`<div class="fig"><img src="../images/${b.img.name}" alt="${esc(b.img.alt)}"/></div>`);
       else if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') out.push(`<${b.type}${b.id ? ` id="${b.id}"` : ''}>${esc(b.text)}</${b.type}>`);
     }
@@ -3170,6 +3596,10 @@ h1+p,h2+p,h3+p,p.first{text-indent:0}
 .notes{margin-top:2em;border-top:1px solid #999;padding-top:.6em;font-size:.9em}
 .notes h2{font-size:1em;margin:0 0 .5em}
 .notes p{text-indent:0;margin:.3em 0;text-align:left}
+table{margin:1em 0;border-collapse:collapse;width:100%;font-size:.92em;text-align:left}
+th,td{border:1px solid #999;padding:.3em .45em;vertical-align:top}
+th{background:#eee;font-weight:700}
+caption{caption-side:top;font-style:italic;font-size:.9em}
 `;
 
   const container = `<?xml version="1.0" encoding="utf-8"?>

@@ -114,7 +114,8 @@ Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send
 - **Real paragraphs.** Lines the PDF broke at the margin — and at the page edge — are joined back into whole sentences. Words hyphenated across a line are repaired.
 - **Chapters and a table of contents.** Section headings become chapters; smaller headings become nested entries you can tap.
 - **Running heads, feet and page numbers** are detected and removed.
-- **Pictures are kept.** Picture figures are cropped from the page and placed where they belong. Pages that are one big picture (scans) come through as page images. Charts and diagrams drawn as vectors stay on the PDF only.
+- **Pictures are kept.** Graphs, charts, diagrams and illustrations are found on each page and cropped, then placed between the paragraphs they belong to. This works for pictures embedded in the PDF and for drawings made of vector shapes. Full-page backgrounds, watermarks, rules and logos in the margins are left out. Pages that are one big picture (scans) come through as page images.
+- **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
 - **Two-column pages** are read one column at a time, so the text stays in order.
 - **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
 - **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
@@ -126,6 +127,8 @@ Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send
 - When a page is read with OCR, the text replaces the page picture by default. That keeps the EPUB small, reflowable and searchable, and stops the reader from showing the same page twice.
 - **Keep the page picture too** puts the scan after its text. That is useful when you need the original for checking names, numbers, tables or formulas, but it roughly doubles the size of those pages, so it is off by default.
 - If OCR is not confident about a page, the picture is kept alongside the text automatically, so nothing is lost.
+
+- **Table detection is careful.** Pages that only look like tables — two columns of prose, diagrams with boxes, figure labels — are left as text or pictures. Merged cells are approximated: a cell that spans several columns appears as an empty cell next to the filled one.
 
 Good to know:
 - **OCR is opt-in.** The engine is about 15 MB and is downloaded the first time you use it, plus one language file; the page itself never leaves your device. Scans that are not read stay as images, and their text can't be searched.
@@ -158,5 +161,7 @@ Good to know:
 | EPUB paragraphs run together or split oddly | The page layout is unusual (tables, poetry, sidebars). Try a different PDF or fix the paragraphs in a reader or editor. |
 | EPUB has no chapters | The PDF has no headings the app can recognise. Long books are split into parts instead. |
 | OCR does nothing | Tick **Read the text with OCR**, and make sure the page really is text. Photos, plates and diagrams are deliberately left as images. |
+| A table came out as plain paragraphs | The table has no rules and its columns are not aligned, or it sits inside a scanned page. It is kept as text; tables in scans are not rebuilt. |
+| A picture is missing | Backgrounds and full-page tints are dropped on purpose. Art that is part of the page background cannot be separated from it. |
 | OCR text has mistakes | Recognition is best-effort. Try a higher-quality scan, or turn on **Keep the page picture too** to compare. |
 | Something looks off after an edit | Use **Undo** in Elements. The original file on your device is never changed. |
