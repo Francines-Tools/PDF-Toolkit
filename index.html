@@ -2766,7 +2766,7 @@ function looseTables(lines, pn) {
       const gapHere = q ? run[q - 1].y - run[q].y : 0;
       const tighter = q > 0 && minGap > 0 && gapHere < minGap * 1.5;
       const up = logical[logical.length - 1];
-      const fewer = !!up && run[q].segs.length < up.segs;
+      const fewer = run[q].segs.length < maxN;
       const headerish = q === 1 && cur.filter(t => !t).length >= nc * 0.4;
       let ok = !!up, any = false;
       if (up) cur.forEach((t, c) => { if (!t) return; any = true; if (!up.cells[c]) ok = false; });
@@ -2795,8 +2795,9 @@ function looseTables(lines, pn) {
 
     const colFill = [];
     for (let c = 0; c < nc; c++) colFill.push(rows1.filter(r => r[c]).length);
-    if (colFill.some(n => n < Math.ceil(nr * 0.5))) continue;
-    if (colFill[0] < Math.ceil(nr * 0.6)) continue;
+    /* merged cells leave some columns empty in the rows they span */
+    if (colFill.some(n => n < Math.max(1, Math.ceil(nr * 0.2)))) continue;
+    if (colFill[0] < 1) continue;
     if (nc === 2) {
       if (nr < 3 || median > 30) continue;
       if (colFill.some(n => n < Math.ceil(nr * 0.7))) continue;
