@@ -35,6 +35,7 @@ Makes your PDF smaller by shrinking its pictures. **Text stays text**, so it rem
 - Pick a level, tap **Compress**, then **Save compressed PDF**.
 
 Good to know:
+- **Complex equations** are linearised, not rebuilt as MathML. A stacked fraction becomes its parts in reading order rather than a two-dimensional formula.
 - If your file is mostly text, there is little to gain, and the app says so.
 - Pictures already stored in very efficient formats (such as JPEG 2000 or scanned-document formats) are left alone.
 - Estimates are approximate. The real size is shown when it finishes.
@@ -118,6 +119,7 @@ Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send
 - **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns, including two-column tables, two-row tables, and tables with alternating shaded rows — shaded and plain rows are kept together, and a header that wraps over several lines is folded back into one header row. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
 - **Two-column pages** are read one column at a time, so the text stays in order.
 - **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
+- **Superscripts, subscripts and maths.** Raised and lowered small text becomes <sup>/<sub> (x², H₂O), TeX-style symbols such as \alpha, \times and \le are turned into α, × and ≤, and text from maths fonts is kept as maths. Accented letters are normalised to standard Unicode, so ü, ö and é survive the trip.
 - **Lists stay lists.** Bulleted and numbered items become real lists in the EPUB, one item per bullet, and an item that wraps onto another line stays in one item.
 - **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
 - **Contents pages are kept and made clickable.** A printed table of contents becomes its own chapter, with each title and its page number on one line. When the entries can be matched to the chapters and sections (by title, then by page number), each entry links straight to its chapter; if they cannot be matched, the entries stay as plain text.

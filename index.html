@@ -2269,7 +2269,7 @@ const $e = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
-const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const clean = s => String(s == null ? '' : s).normalize('NFC').replace(/\s+/g, ' ').trim();
 function stripRuns(runs, n) {
   let left = n;
   const out = [];
@@ -2291,6 +2291,20 @@ function bulletOf(l) {
   if (m[2] && text.length > 60) return null;
   return { ordered:!!m[2], runs, text };
 }
+const TEXSYM = {
+  alpha:'α', beta:'β', gamma:'γ', delta:'δ', epsilon:'ε', zeta:'ζ', eta:'η', theta:'θ',
+  iota:'ι', kappa:'κ', lambda:'λ', mu:'μ', nu:'ν', xi:'ξ', pi:'π', rho:'ρ', sigma:'σ',
+  tau:'τ', upsilon:'υ', phi:'φ', chi:'χ', psi:'ψ', omega:'ω',
+  Gamma:'Γ', Delta:'Δ', Theta:'Θ', Lambda:'Λ', Xi:'Ξ', Pi:'Π', Sigma:'Σ', Upsilon:'Υ',
+  Phi:'Φ', Psi:'Ψ', Omega:'Ω',
+  times:'×', cdot:'·', pm:'±', mp:'∓', div:'÷', le:'≤', leq:'≤', ge:'≥', geq:'≥',
+  ne:'≠', neq:'≠', approx:'≈', equiv:'≡', propto:'∝', infty:'∞', partial:'∂',
+  nabla:'∇', sum:'∑', prod:'∏', int:'∫', sqrt:'√', angle:'∠', perp:'⊥', parallel:'∥',
+  to:'→', rightarrow:'→', leftarrow:'←', Rightarrow:'⇒', Leftarrow:'⇐', leftrightarrow:'↔',
+  in:'∈', notin:'∉', subset:'⊂', subseteq:'⊆', cup:'∪', cap:'∩', forall:'∀', exists:'∃',
+  emptyset:'∅', therefore:'∴', because:'∵', degree:'°', ohm:'Ω', micro:'µ', ell:'ℓ'
+};
+const texify = s => String(s).replace(/\\([A-Za-z]+)(\{\})?/g, (m, name) => TEXSYM[name] || m);
 const joinText = (a, b) => {
   if (!a) return b;
   if (/[\u00ad-]$/.test(a) && /^[\p{Ll}]/u.test(b)) return a.replace(/[\u00ad-]$/, '') + b;
@@ -2353,7 +2367,8 @@ function fontStyle(page, name) {
       const f = page.commonObjs.get(name) || {}, nm = String(f.name || '');
       v = {
         bold: !!(f.bold || f.black) || /(?:bold|black|heavy|semibold|demi|medi(?:um)?|[-_+,]bd)/i.test(nm),
-        italic: !!f.italic || /(?:italic|oblique|[-_+,]it\b|[-_+,]ital)/i.test(nm)
+        italic: !!f.italic || /(?:italic|oblique|[-_+,]it\b|[-_+,]ital)/i.test(nm),
+        math: /(?:^|[+_-])(cm|ms|lm|stix|xits|euler|rsfs|math)/i.test(nm) || /math/i.test(nm)
       };
     }
   } catch (e) {}
@@ -2391,26 +2406,67 @@ function buildLines(p) {
     flush();
   }
   lines.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+  if (lines.length > 1) {
+    const sizes = lines.map(l => l.size).sort((a, b) => a - b);
+    const med = sizes[sizes.length >> 1];
+    const extra = new Map();
+    for (const L of lines) {
+      if (L.size >= med * 0.85) continue;
+      let best = null, bd = 1e9;
+      for (const M of lines) {
+        if (M === L || M.size < med * 0.85) continue;
+        const dy = Math.abs(M.y - L.y);
+        if (dy > med * 1.2) continue;
+        const gap = Math.max(M.x0 - L.x1, L.x0 - M.x1);
+        if (gap > med * 2.2) continue;
+        if (dy < bd) { bd = dy; best = M; }
+      }
+      if (best) {
+        L.dead = true;
+        if (!extra.has(best)) extra.set(best, []);
+        extra.get(best).push(...L.items);
+      }
+    }
+    if (extra.size) {
+      const kept = lines.filter(l => !l.dead).map(l => {
+        const more = extra.get(l);
+        if (!more) return l;
+        return makeLine({ y:l.y, items:l.items.concat(more).sort((a, b) => a.x - b.x) });
+      });
+      kept.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+      return kept;
+    }
+  }
   return lines;
 }
 
 function makeLine(seg) {
   const items = seg.items;
   let text = '';
+  /* dominant size and baseline, to spot raised/lowered small runs */
+  let domSize = items[0].fs, domY = items[0].y, most = 0;
+  for (const it of items) {
+    const c = it.s.trim().length;
+    if (c > most) { most = c; domSize = it.fs; domY = it.y; }
+  }
   const runs = [];
   const push = (t, it) => {
     if (!t) return;
-    const b = !!(it && it.bold), i = !!(it && it.italic);
+    const b = !!(it && it.bold), i = !!(it && it.italic), m = !!(it && it.math);
+    const small = !!(it && it.fs < domSize * 0.82);
+    const sup = small && it.y > domY + domSize * 0.12;
+    const sub = small && it.y < domY - domSize * 0.12;
     const last = runs[runs.length - 1];
-    if (last && last.b === b && last.i === i) last.t += t;
-    else runs.push({ t, b, i });
+    if (last && last.b === b && last.i === i && last.sup === sup && last.sub === sub && last.math === m) last.t += t;
+    else runs.push({ t, b, i, sup, sub, math:m });
   };
   const isMarker = t => /^([\u2022\u00b7\u25aa\u25e6\u2023*\-\u2013\u2014]|\d{1,3}[.)]|\(?[A-Za-z]\))$/.test(t.trim());
   for (let k = 0; k < items.length; k++) {
     const it = items[k], prev = items[k - 1];
     if (prev) {
       const gap = it.x - (prev.x + prev.w);
-      if (gap > Math.max(1, Math.min(it.fs, prev.fs) * 0.16) && !/\s$/.test(text) && !/^\s/.test(it.s)) push(' ', prev);
+      const tight = /[(\[{]$/.test(prev.s.trimEnd()) || /^[)\]},.;:!?%]/.test(it.s.trimStart());
+      if (!tight && gap > Math.max(1.5, Math.min(it.fs, prev.fs) * 0.22) && !/\s$/.test(text) && !/^\s/.test(it.s)) push(' ', prev);
       else if (isMarker(text) && !/^\s/.test(it.s)) push(' ', prev);
     }
     push(it.s, it);
@@ -2430,7 +2486,7 @@ function makeLine(seg) {
     last.t = last.t.replace(/\s+$/, '');
   }
   return {
-    y: seg.y, size,
+    y: seg.y, size, items,
     x0: Math.min(...items.map(i => i.x)),
     x1: Math.max(...items.map(i => i.x + (i.w || 0))),
     text: t, runs,
@@ -3184,11 +3240,16 @@ function cropCanvas(src, b, pad) {
 }
 
 /* ---- structure ---- */
+const WORDLY = /[\p{L}\p{N}]/u;
 const runsHtml = runs => runs.map(r => {
   let t = esc(r.t.replace(/\s+/g, ' '));
   if (!t.trim()) return t ? ' ' : '';
-  if (r.b) t = '<strong>' + t + '</strong>';
-  if (r.i) t = '<em>' + t + '</em>';
+  const word = WORDLY.test(r.t);
+  if (r.sup && word) t = t.replace(/^(\s*)([\s\S]*?)(\s*)$/, (m, a, b, c) => a + '<sup>' + b + '</sup>' + c);
+  else if (r.sub && word) t = t.replace(/^(\s*)([\s\S]*?)(\s*)$/, (m, a, b, c) => a + '<sub>' + b + '</sub>' + c);
+  if (r.math) t = '<span class="math">' + t + '</span>';
+  if (r.b && word) t = '<strong>' + t + '</strong>';
+  if (r.i && word) t = '<em>' + t + '</em>';
   return t;
 }).join('');
 
@@ -3196,8 +3257,8 @@ function mergeRuns(dst, src) {
   for (const r of src) {
     if (!r.t) continue;
     const last = dst[dst.length - 1];
-    if (last && last.b === r.b && last.i === r.i) last.t += r.t;
-    else dst.push({ t:r.t, b:r.b, i:r.i });
+    if (last && last.b === r.b && last.i === r.i && last.sup === r.sup && last.sub === r.sub && last.math === r.math) last.t += r.t;
+    else dst.push({ t:r.t, b:r.b, i:r.i, sup:r.sup, sub:r.sub, math:r.math });
   }
 }
 
@@ -3355,7 +3416,7 @@ async function convert() {
         if (Math.abs(Math.abs(ang) - 90) < 20 && vp.rotation % 180 === 0) continue;
         const fs = Math.hypot(tr[2], tr[3]) || it.height || 10;
         const f = fontStyle(page, it.fontName);
-        raw.push({ s:it.str, x:tr[4], y:tr[5], w:it.width || 0, fs, bold:f.bold, italic:f.italic });
+        raw.push({ s:texify(it.str.normalize('NFC')), x:tr[4], y:tr[5], w:it.width || 0, fs, bold:f.bold, italic:f.italic, math:f.math });
       }
       const seenText = new Map(), items = [];
       for (const it of raw) {
@@ -3584,8 +3645,8 @@ async function convert() {
         if (!t) continue;
         prevSpace = / $/.test(t);
         const last = out[out.length - 1];
-        if (last && last.b === r.b && last.i === r.i) last.t += t;
-        else out.push({ t, b:r.b, i:r.i });
+        if (last && last.b === r.b && last.i === r.i && last.sup === r.sup && last.sub === r.sub && last.math === r.math) last.t += t;
+        else out.push({ t, b:r.b, i:r.i, sup:r.sup, sub:r.sub, math:r.math });
       }
       if (out.length) out[out.length - 1].t = out[out.length - 1].t.replace(/ $/, '');
       return out;
@@ -4031,6 +4092,8 @@ h1+p,h2+p,h3+p,p.first{text-indent:0}
 .notes h2{font-size:1em;margin:0 0 .5em}
 .notes p{text-indent:0;margin:.3em 0;text-align:left}
 table{margin:1em 0;border-collapse:collapse;width:100%;font-size:.92em;text-align:left}
+sup,sub{font-size:.72em;line-height:0}
+.math{font-style:normal}
 ul,ol{margin:.6em 0 .7em 1.3em;padding-left:.4em}
 li{margin:.25em 0;text-indent:0}
 .toc{text-indent:0;margin:.3em 0}
