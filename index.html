@@ -2629,7 +2629,8 @@ function tocLines(p) {
     for (const r of (b.runs || [{ t:b.text }])) runs.push({ t:r.t, b:r.b, i:r.i });
     out.push({
       y, size:a.size, x0:a.x0, x1:b.x1, toc:true,
-      text:clean(a.text + ' ' + b.text), runs
+      text:clean(a.text + ' ' + b.text), runs,
+      tocTitle:clean(a.text), tocPage:clean(b.text)
     });
   }
   if (out.length < 4) return null;
@@ -3574,7 +3575,7 @@ async function convert() {
           const lvl = l.toc ? 0 : heading(l, bnd.left, bnd.right);
           if (l.toc) {
             pushPara();
-            blocks.push({ type:'p', runs:l.runs, text:l.text, pg:p.n, toc:true });
+            blocks.push({ type:'p', runs:l.runs, text:l.text, pg:p.n, toc:true, tocTitle:l.tocTitle, tocPage:l.tocPage });
             prev = { l, p:p.n };
             continue;
           }
@@ -3626,8 +3627,8 @@ async function convert() {
     const bookTitle = clean($e('ebTitle').value) || state.name.replace(/\.pdf$/i, '');
     const chapters = [];
     let cur = null, anchor = 0;
-    const open = title => {
-      cur = { title:title || bookTitle, blocks:[], subs:[], notes:[] };
+    const open = (title, pg) => {
+      cur = { title:title || bookTitle, blocks:[], subs:[], notes:[], pg:pg || 0 };
       chapters.push(cur);
       return cur;
     };
@@ -3641,14 +3642,14 @@ async function convert() {
         const lowOnPage = b.h && b.y != null && b.y < b.h * 0.55 &&
           !/^(\d+[.)]?\s|chapter|part|book|section|appendix|prologue|epilogue|introduction|conclusion|contents|preface|foreword|afterword)/i.test(t);
         if ((sentence || lowOnPage) && cur) { b.type = 'h2'; cur.blocks.push(b); continue; }
-        if (cur && !cur.blocks.length && !cur.subs.length) { cur.title = t; cur.blocks.push({ type:'h1', text:t }); }
-        else { open(t); cur.blocks.push({ type:'h1', text:t }); }
+        if (cur && !cur.blocks.length && !cur.subs.length) { cur.title = t; cur.pg = b.pg || cur.pg; cur.blocks.push({ type:'h1', text:t }); }
+        else { open(t, b.pg); cur.blocks.push({ type:'h1', text:t }); }
         continue;
       }
       if (!cur) open(bookTitle);
       if (b.type === 'h2') {
         b.id = 's' + (++anchor);
-        cur.subs.push({ id:b.id, title:b.text, level:2 });
+        cur.subs.push({ id:b.id, title:b.text, level:2, pg:b.pg || 0 });
         cur.blocks.push(b);
       } else if (b.type === 'note') {
         cur.notes.push(b.text);
@@ -3676,6 +3677,43 @@ async function convert() {
       chapters.length = 0; chapters.push(...parts);
     }
     for (const c of chapters) if (!c.title) c.title = bookTitle;
+
+    /* link a printed contents page to the chapters and sections it names */
+    const tocBlocks = [];
+    for (const c of chapters) for (const b of c.blocks) if (b.toc && b.tocTitle) tocBlocks.push(b);
+    if (tocBlocks.length) {
+      const norm = t => ' ' + String(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + ' ';
+      const bare = t => norm(t).replace(/^\s*\d+(?:[.\s]\d+)*[.)]?\s+/, ' ').trim();
+      const targets = [];
+      chapters.forEach((c, i) => {
+        targets.push({ ch:i + 1, id:null, key:norm(c.title), bare:bare(c.title), pg:c.pg || 0 });
+        (c.subs || []).forEach(sub => targets.push({ ch:i + 1, id:sub.id, key:norm(sub.title), bare:bare(sub.title), pg:sub.pg || 0 }));
+      });
+      const pick = t => {
+        const k = norm(t), b = bare(t);
+        let hit = targets.find(x => x.key === k) || targets.find(x => x.bare === b);
+        if (!hit) hit = targets.find(x => x.key.startsWith(k) && k.length >= 8) || targets.find(x => k.startsWith(x.key) && x.key.length >= 8);
+        return hit || null;
+      };
+      const pairs = [];
+      for (const b of tocBlocks) {
+        const hit = pick(b.tocTitle);
+        if (hit) pairs.push({ hit, off: hit.pg - (parseInt(b.tocPage, 10) || 0) });
+      }
+      if (pairs.length >= Math.ceil(tocBlocks.length * 0.5)) {
+        const tally = new Map();
+        for (const p of pairs) tally.set(p.off, (tally.get(p.off) || 0) + 1);
+        let offset = 0, best = 0;
+        for (const [o, n] of tally) if (n > best) { best = n; offset = o; }
+        for (const b of tocBlocks) {
+          const hit = pick(b.tocTitle);
+          if (hit) { b.link = { ch:hit.ch, id:hit.id }; continue; }
+          const pg = (parseInt(b.tocPage, 10) || 0) + offset;
+          const byPage = pg > 0 ? targets.filter(x => x.pg === pg).sort((x, y) => (x.id ? 1 : 0) - (y.id ? 1 : 0))[0] : null;
+          if (byPage) b.link = { ch:byPage.ch, id:byPage.id };
+        }
+      }
+    }
 
     /* drop pictures nothing points at */
     const usedImgs = new Set();
@@ -3777,7 +3815,13 @@ ${body.html}
   chapters.forEach((c, i) => {
     const out = [];
     for (const b of c.blocks) {
-      if (b.type === 'p') out.push('<p>' + runsHtml(b.runs || [{ t:b.text }]) + '</p>');
+      if (b.type === 'p') {
+        if (b.toc && b.tocTitle) {
+          const page = b.tocPage ? ` <span class="pg">${esc(b.tocPage)}</span>` : '';
+          if (b.link) out.push(`<p class="toc"><a href="ch${b.link.ch}.xhtml${b.link.id ? '#' + b.link.id : ''}">${esc(b.tocTitle)}</a>${page}</p>`);
+          else out.push(`<p class="toc">${esc(b.text)}</p>`);
+        } else out.push('<p>' + runsHtml(b.runs || [{ t:b.text }]) + '</p>');
+      }
       else if (b.type === 'table') out.push(tableXhtml(b.table));
       else if (b.type === 'img') out.push(`<div class="fig"><img src="../images/${b.img.name}" alt="${esc(b.img.alt)}"/></div>`);
       else if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') out.push(`<${b.type}${b.id ? ` id="${b.id}"` : ''}>${esc(b.text)}</${b.type}>`);
@@ -3870,6 +3914,8 @@ h1+p,h2+p,h3+p,p.first{text-indent:0}
 .notes h2{font-size:1em;margin:0 0 .5em}
 .notes p{text-indent:0;margin:.3em 0;text-align:left}
 table{margin:1em 0;border-collapse:collapse;width:100%;font-size:.92em;text-align:left}
+.toc{text-indent:0;margin:.3em 0}
+.toc .pg{float:right;color:#555;font-size:.9em}
 th,td{border:1px solid #999;padding:.3em .45em;vertical-align:top}
 th{background:#eee;font-weight:700}
 caption{caption-side:top;font-style:italic;font-size:.9em}

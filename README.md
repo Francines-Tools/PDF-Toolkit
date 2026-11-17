@@ -119,7 +119,7 @@ Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send
 - **Two-column pages** are read one column at a time, so the text stays in order.
 - **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
 - **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
-- **Contents pages are kept.** A printed table of contents becomes its own chapter, with each title and its page number on one line instead of numbers being glued to the text or turned into headings.
+- **Contents pages are kept and made clickable.** A printed table of contents becomes its own chapter, with each title and its page number on one line. When the entries can be matched to the chapters and sections (by title, then by page number), each entry links straight to its chapter; if they cannot be matched, the entries stay as plain text.
 - Title, author and language are filled in from the PDF but you can change them before converting.
 - Bold and italic text is kept where the PDF's fonts identify it.
 
