@@ -2270,6 +2270,11 @@ const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const joinText = (a, b) => {
+  if (!a) return b;
+  if (/[\u00ad-]$/.test(a) && /^[\p{Ll}]/u.test(b)) return a.replace(/[\u00ad-]$/, '') + b;
+  return a + ' ' + b;
+};
 const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
 const STOP = { cancel:false };
 let LEFT = 0, RIGHT = 600;
@@ -2641,6 +2646,8 @@ function looseTables(lines, pn) {
   }
   const seq = [...rowsBy.keys()].sort((a, b) => b - a).map(y => ({ y, segs:rowsBy.get(y).sort((a, b) => a.x0 - b.x0) }));
   const out = [], taken = new Set();
+
+  /* two-row, many-column table (header over one row of values) */
   for (let q = 0; q + 1 < seq.length; q++) {
     const A = seq[q];
     if (A.segs.length < 4) continue;
@@ -2684,29 +2691,33 @@ function looseTables(lines, pn) {
     taken.add(A.y); taken.add(B.y);
     for (const row of cont) taken.add(row.y);
   }
-  const seq2 = seq.filter(r => !taken.has(r.y));
+  const rest = seq.filter(r => !taken.has(r.y));
   seq.length = 0;
-  seq.push(...seq2);
+  seq.push(...rest);
 
   let i = 0;
   while (i < seq.length) {
     if (seq[i].segs.length < 2) { i++; continue; }
     let end = i + 1;
+    const firstX = seq[i].segs[0].x0;
     while (end < seq.length) {
       const r = seq[end], prev = seq[end - 1];
       const gap = prev.y - r.y;
       if (gap <= 0) break;
       const tall = Math.max(prev.segs[0].size, r.segs[0].size);
       if (gap > tall * 2.4) break;
-      if (r.segs.length === 1 && Math.max(...r.segs.map(x => x.text.length)) > 45) break;
       if (r.segs.length > 10) break;
+      if (r.segs.length === 1) {
+        const c = r.segs[0];
+        if (c.x0 <= firstX + 15) break;
+        if (c.text.length > 200) break;
+      }
       end++;
-      if (end - i > 40) break;
+      if (end - i > 60) break;
     }
     const run = seq.slice(i, end);
     i = end;
 
-    /* drop a caption line above the table and footnote lines below it */
     while (run.length && run[0].segs.length === 1) {
       const t = run[0].segs[0].text;
       if (t.length > 40 || /^(table|figure|box)\b/i.test(t)) run.shift();
@@ -2716,88 +2727,93 @@ function looseTables(lines, pn) {
            Math.max(...run[run.length - 1].segs.map(s => s.text.length)) > 110) run.pop();
     if (run.length < 2) continue;
 
+    /* columns from the fullest rows */
+    const maxN = Math.max(...run.map(r => r.segs.length));
+    if (maxN < 2) continue;
+    const basis = run.filter(r => r.segs.length === maxN);
     const starts = [];
-    for (const r of run) for (const s of r.segs) starts.push(s.x0);
-    starts.sort((a, b) => a - b);
+    for (const r of basis) for (const seg of r.segs) starts.push(seg.x0);
+    starts.sort((x, y) => x - y);
     const cols = [];
     for (const x of starts) {
       const c = cols[cols.length - 1];
-      if (c && x - c.last <= 12) { c.last = x; c.n++; }
-      else cols.push({ last:x, x0:x, n:1 });
+      if (c && x - c.x0 <= 12) c.n++;
+      else cols.push({ x0:x, n:1 });
     }
-    const need = Math.max(2, Math.ceil(run.length * 0.7));
+    const need = Math.max(2, Math.ceil(basis.length * 0.5));
     const solid = cols.filter(c => c.n >= need);
     if (solid.length < 2) continue;
-    const xs = solid.map(c => c.x0).sort((a, b) => a - b);
-
+    const xs = solid.map(c => c.x0).sort((x, y) => x - y);
+    const nc = xs.length;
     const rows0 = run.map(r => {
       const cells = xs.map(() => '');
-      for (const s of r.segs) {
+      for (const seg of r.segs) {
         let best = 0, bd = 1e9;
-        xs.forEach((x, ci) => { const d = Math.abs(s.x0 - x); if (d < bd) { bd = d; best = ci; } });
-        cells[best] = clean((cells[best] ? cells[best] + ' ' : '') + s.text);
+        xs.forEach((x, ci) => { const d = Math.abs(seg.x0 - x); if (d < bd) { bd = d; best = ci; } });
+        cells[best] = clean((cells[best] ? cells[best] + ' ' : '') + seg.text);
       }
       return cells;
     });
 
-    let nr = rows0.length, nc = xs.length;
-    {
-      const gs2 = [];
-      for (let q = 1; q < run.length; q++) gs2.push(run[q - 1].y - run[q].y);
-      gs2.sort((x, y) => x - y);
-      const medGap = gs2[gs2.length >> 1] || 0;
-      if (medGap) {
-        for (let q = 1; q < rows0.length; q++) {
-          const cur = rows0[q], up = rows0[q - 1];
-          const smallGap = run[q - 1].y - run[q].y < medGap * 0.7;
-          const headerish = q === 1 && cur.filter(t => !t).length >= nc * 0.4;
-          if (!smallGap && !headerish) continue;
-          let ok = true, any = false;
-          cur.forEach((t, c) => {
-            if (!t) return;
-            any = true;
-            if (!up[c]) ok = false;
-          });
-          if (ok && any) {
-            cur.forEach((t, c) => { if (t) up[c] = clean(up[c] + ' ' + t); });
-            rows0.splice(q, 1);
-            run.splice(q, 1);
-            q--;
-          }
-        }
+    /* wrapped cell lines join the logical row above */
+    const gaps = [];
+    for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
+    const sorted = gaps.slice().sort((a, b) => a - b);
+    const minGap = sorted[Math.floor(sorted.length * 0.15)] || 0;
+    const logical = [];
+    for (let q = 0; q < rows0.length; q++) {
+      const cur = rows0[q];
+      const gapHere = q ? run[q - 1].y - run[q].y : 0;
+      const tighter = q > 0 && minGap > 0 && gapHere < minGap * 1.5;
+      const up = logical[logical.length - 1];
+      const fewer = !!up && run[q].segs.length < up.segs;
+      const headerish = q === 1 && cur.filter(t => !t).length >= nc * 0.4;
+      let ok = !!up, any = false;
+      if (up) cur.forEach((t, c) => { if (!t) return; any = true; if (!up.cells[c]) ok = false; });
+      if (ok && any && ((tighter && fewer) || headerish)) {
+        cur.forEach((t, c) => { if (t) up.cells[c] = clean(joinText(up.cells[c], t)); });
+        up.y0 = run[q].y;
+      } else {
+        logical.push({ cells:cur.slice(), y:run[q].y, y0:run[q].y, segs:run[q].segs.length });
       }
-      nr = rows0.length;
     }
+    const rows1 = logical.map(r => r.cells);
+    const nr = rows1.length;
+    if (nr && rows1[0].filter(t => /[\p{L}]/u.test(t)).length < Math.ceil(nc * 0.5)) continue;
+    if (nr < 2 || nc < 2 || (nr === 2 && nc < 3)) continue;
+
     const lens = [];
-    for (const r of rows0) for (const t of r) if (t) lens.push(t.length);
+    for (const r of rows1) for (const t of r) if (t) lens.push(t.length);
     lens.sort((a, b) => a - b);
     const filled = lens.length, cells = nr * nc;
     const median = lens[Math.floor(lens.length / 2)] || 0;
+    const p25 = lens[Math.floor(lens.length * 0.25)] || 0;
     const long = lens.filter(n => n > 100).length;
-    if (filled < cells * 0.5 || median > 45 || long > cells * 0.15) continue;
-    if (rows0.some(r => r.some(t => (t.match(/\b\d+(?:[.,]\d+)?\b/g) || []).length >= 4))) continue;
-    if (nc < 2 || (nr < 3 && nc < 4)) continue;
+    if (filled < cells * 0.5 || p25 > 60 || long > cells * 0.6) continue;
+    if (rows1.some(r => r.some(t => (t.match(/\b\d+(?:[.,]\d+)?\b/g) || []).length >= 4))) continue;
+    if (rows1.some(r => r.some(t => /https?:\/\/|www\./i.test(t)))) continue;
 
     const colFill = [];
-    for (let c = 0; c < nc; c++) colFill.push(rows0.filter(r => r[c]).length);
+    for (let c = 0; c < nc; c++) colFill.push(rows1.filter(r => r[c]).length);
     if (colFill.some(n => n < Math.ceil(nr * 0.5))) continue;
     if (colFill[0] < Math.ceil(nr * 0.6)) continue;
     if (nc === 2) {
       if (nr < 3 || median > 30) continue;
       if (colFill.some(n => n < Math.ceil(nr * 0.7))) continue;
-      if (Math.max(...rows0.map(r => (r[0] || '').length)) > 40) continue;
-      const numeric = rows0.filter(r => /\d/.test(r[1] || '')).length;
+      if (Math.max(...rows1.map(r => (r[0] || '').length)) > 40) continue;
+      const numeric = rows1.filter(r => /\d/.test(r[1] || '')).length;
       if (numeric < Math.ceil(nr * 0.4)) continue;
     }
-    const gaps = [];
-    for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
-    if (gaps.length) {
-      const gs = gaps.slice().sort((x, y) => x - y), med = gs[gs.length >> 1] || 0;
-      if (!med || Math.max(...gaps) > med * 2.6 || Math.min(...gaps) < med * 0.35) continue;
+    const rowGaps = [];
+    for (let q = 1; q < logical.length; q++) rowGaps.push(logical[q - 1].y0 - logical[q].y);
+    if (rowGaps.length) {
+      const gs = rowGaps.slice().sort((x, y) => x - y), med = gs[gs.length >> 1] || 0;
+      if (!med || Math.max(...rowGaps) > med * 2.6 || Math.min(...rowGaps) < med * 0.35) continue;
     }
+
     const maxSize = Math.max(...run[0].segs.map(s => s.size), 10);
     out.push({
-      rows: rows0.map(r => r.map(t => ({ text:t, bold:false }))),
+      rows: rows1.map(r => r.map(t => ({ text:t, bold:false }))),
       header: true, ruled: false,
       x0: Math.min(...run.flatMap(r => r.segs.map(s => s.x0))),
       x1: Math.max(...run.flatMap(r => r.segs.map(s => s.x1))),
@@ -2814,14 +2830,33 @@ function buildTables(p) {
     it.y > l.y - l.size * 0.5 && it.y < l.y + l.size * 1.2 &&
     it.x + (it.w || 0) / 2 > l.x0 - 2 && it.x + (it.w || 0) / 2 < l.x1 + 2
   )) : p.items;
-  let tabs = [];
+
+  const ruled = [];
   if (p.segs && p.segs.length) {
     for (const t of ruledTables(p.segs)) {
       const tt = tableFromGrid(t, usable);
-      if (tt) tabs.push(tt);
+      if (tt) ruled.push(tt);
     }
   }
-  if (!tabs.length) tabs = looseTables((p.lines || []).filter(l => !l.gone), p.n);
+  const loose = looseTables((p.lines || []).filter(l => !l.gone), p.n) || [];
+  const overlap = (a, b) => {
+    const ox = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
+    const oy = Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+    const area = (a.x1 - a.x0) * (a.y1 - a.y0);
+    return area > 0 ? (ox * oy) / area : 0;
+  };
+  const tabs = ruled.slice();
+  for (const L of loose) {
+    const inside = tabs.some(R => L.x0 >= R.x0 - 4 && L.x1 <= R.x1 + 4 && L.y0 >= R.y0 - 6 && L.y1 <= R.y1 + 6);
+    if (inside) continue;
+    const over = tabs.filter(R => overlap(R, L) > 0.5);
+    if (!over.length) { tabs.push(L); continue; }
+    const rows = over.reduce((a, R) => a + R.rows.length, 0);
+    if (L.rows.length >= rows) {
+      for (const R of over) tabs.splice(tabs.indexOf(R), 1);
+      tabs.push(L);
+    }
+  }
   return tabs;
 }
 
