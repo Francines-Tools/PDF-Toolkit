@@ -2930,11 +2930,24 @@ async function visualFigures(p) {
     const parts = bgKey.split(',').map(v => Number(v) * 16 + 8);
     bg = parts;
   }
+  /* pale flat panels (callout tints, decorative bands) are background too */
+  const pageTally = new Map();
+  for (let i = 0; i < dw * dh; i += 2) {
+    const q = (data[i * 4] >> 4) + ',' + (data[i * 4 + 1] >> 4) + ',' + (data[i * 4 + 2] >> 4);
+    pageTally.set(q, (pageTally.get(q) || 0) + 1);
+  }
+  const pale = [];
+  for (const [k, n] of pageTally) {
+    if (n < (dw * dh / 2) * 0.05) continue;
+    const parts = k.split(',').map(v => Number(v) * 16 + 8);
+    if (0.299 * parts[0] + 0.587 * parts[1] + 0.114 * parts[2] > 195) pale.push(parts);
+  }
+  const near = (c, r, g, b, tol) => Math.abs(r - c[0]) < tol && Math.abs(g - c[1]) < tol && Math.abs(b - c[2]) < tol;
   const mask = new Uint8Array(dw * dh);
   for (let i = 0; i < dw * dh; i++) {
     const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
-    const nearBg = bg && Math.abs(r - bg[0]) < 26 && Math.abs(g - bg[1]) < 26 && Math.abs(b - bg[2]) < 26;
-    if (!nearBg && (r < 236 || g < 236 || b < 236)) mask[i] = 1;
+    if ((bg && near(bg, r, g, b, 26)) || pale.some(c => near(c, r, g, b, 18))) continue;
+    if (r < 246 || g < 246 || b < 246) mask[i] = 1;
   }
   const sx = dw / p.w, sy = dh / p.h;
   for (const l of p.lines) {
@@ -3038,18 +3051,36 @@ async function visualFigures(p) {
     }
     if (clashes) continue;
     const medSize = p.lines.length ? p.lines.map(l => l.size).sort((a, b) => a - b)[p.lines.length >> 1] : 11;
-    const absorbed = [];
     const inTable = l => (p.tableCand || []).some(t =>
       l.x0 > t.x0 - 2 && l.x1 < t.x1 + 2 && l.y > t.y0 - 2 && l.y < t.y1 + 2);
+    const boxW = x1 - x0, boxH = yTop - yBot;
+
+    /* a tinted panel full of body text is a callout, not a picture */
+    let textArea = 0;
     for (const l of p.lines) {
-      if (l.gone || l.text.length > 60 || inTable(l)) continue;
-      if (/^(fig(ure)?|table|plate|map|chart|illustration|source)\b/i.test(l.text)) continue;
-      if (l.x0 < x0 - 4 || l.x1 > x1 + 4) continue;
-      if (l.y + l.size * 0.4 > yTop + medSize * 1.8) continue;
-      if (l.y - l.size * 0.3 < yBot - medSize * 2.6) continue;
+      if (l.gone) continue;
+      const ox = Math.max(0, Math.min(x1, l.x1) - Math.max(x0, l.x0));
+      const oy = Math.max(0, Math.min(yTop, l.y + l.size * 0.8) - Math.max(yBot, l.y - l.size * 0.3));
+      if (ox > 0 && oy > 0) textArea += ox * oy;
+    }
+    if (window.__EBT3 && p.n === 5) console.log('FB', JSON.stringify({x0:~~x0,x1:~~x1,yTop:~~yTop,yBot:~~yBot,text:~~(textArea/(boxW*boxH)*100)}));
+    if (textArea > boxW * boxH * 0.35) continue;
+
+    /* anything the figure overlaps is part of the picture: include whole lines,
+       never crop a label in half */
+    const absorbed = [];
+    let tooEntangled = false;
+    for (const l of p.lines) {
+      if (l.gone || inTable(l)) continue;
+      const ox = Math.min(x1, l.x1) - Math.max(x0, l.x0);
+      const oy = Math.min(yTop, l.y + l.size * 0.8) - Math.max(yBot, l.y - l.size * 0.3);
+      if (ox <= 0 || oy <= 0) continue;
+      const nx0 = Math.min(x0, l.x0), nx1 = Math.max(x1, l.x1);
+      const ny1 = Math.max(yTop, l.y + l.size), ny0 = Math.min(yBot, l.y - l.size * 0.4);
+      if (nx1 - nx0 > (x1 - x0) * 1.6 || ny1 - ny0 > (yTop - yBot) * 1.6) { tooEntangled = true; break; }
       absorbed.push(l);
     }
-    if (absorbed.length > 6 || absorbed.reduce((a, l) => a + l.text.length, 0) > 260) absorbed.length = 0;
+    if (tooEntangled) continue;
     if (absorbed.length) {
       x0 = Math.min(x0, ...absorbed.map(l => l.x0));
       x1 = Math.max(x1, ...absorbed.map(l => l.x1));
@@ -3057,7 +3088,41 @@ async function visualFigures(p) {
       yBot = Math.min(yBot, ...absorbed.map(l => l.y - l.size * 0.4));
       for (const l of absorbed) l.gone = true;
     }
-    const pad = 5 * (c.width / dw);
+    /* axis numbers and legends sit just outside the plot area */
+    for (const l of p.lines) {
+      if (l.gone || l.text.length > 40 || inTable(l)) continue;
+      const mid = (l.x0 + l.x1) / 2;
+      if (mid < x0 - boxW * 0.16 || mid > x1 + boxW * 0.16) continue;
+      if (l.y + l.size * 0.4 < yBot - medSize * 0.6 || l.y - l.size * 0.3 > yTop + medSize * 0.6) continue;
+      x0 = Math.min(x0, l.x0); x1 = Math.max(x1, l.x1);
+      yTop = Math.max(yTop, l.y + l.size); yBot = Math.min(yBot, l.y - l.size * 0.4);
+      l.gone = true;
+    }
+
+    /* tidy the top and bottom edges: short labels are taken whole,
+       long lines are cut out instead of leaving half a word in the crop */
+    for (const l of p.lines) {
+      if (l.gone || inTable(l)) continue;
+      const ox = Math.min(x1, l.x1) - Math.max(x0, l.x0);
+      if (ox <= 0) continue;
+      const inside = l.y - l.size * 0.3 >= yBot && l.y + l.size * 0.8 <= yTop;
+      if (inside) continue;
+      const nearTop = l.y + l.size * 0.8 >= yTop - l.size * 1.2 && l.y <= yTop + l.size * 1.4;
+      const nearBot = l.y - l.size * 0.3 <= yBot + l.size * 1.2 && l.y + l.size * 0.8 >= yBot - l.size * 1.4;
+      if (!nearTop && !nearBot) continue;
+      if (l.text.length <= 40) {
+        x0 = Math.min(x0, l.x0); x1 = Math.max(x1, l.x1);
+        yTop = Math.max(yTop, l.y + l.size); yBot = Math.min(yBot, l.y - l.size * 0.4);
+        l.gone = true;
+      } else if (nearTop) {
+        yTop = Math.min(yTop, l.y - l.size * 0.5);
+      } else {
+        yBot = Math.max(yBot, l.y + l.size * 0.9);
+      }
+    }
+    if (x1 - x0 < 16 || yTop - yBot < 10) continue;
+
+    const pad = 2 * (c.width / dw);
     const cc = cropCanvas(c, {
       x0: x0 * sx * (c.width / dw) - pad, y0: (p.h - yTop) * sy * (c.height / dh) - pad,
       x1: x1 * sx * (c.width / dw) + pad, y1: (p.h - yBot) * sy * (c.height / dh) + pad
