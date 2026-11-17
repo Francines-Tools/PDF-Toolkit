@@ -2357,7 +2357,9 @@ function buildLines(p) {
       if (!seg) { seg = { y:g.y, items:[it] }; continue; }
       const prev = seg.items[seg.items.length - 1];
       const widest = Math.max(it.fs, prev.fs);
-      if (it.x - (prev.x + prev.w) > widest * 1.15) { flush(); seg = { y:g.y, items:[it] }; }
+      const gap = it.x - (prev.x + prev.w);
+      const marker = /^([\u2022\u00b7\u25aa\u25e6\u2023*\-\u2013\u2014]|\d{1,3}[.)]|\(?[A-Za-z]\))$/.test(seg.items.map(x => x.s).join('').trim());
+      if (gap > widest * (marker ? 5 : 1.15)) { flush(); seg = { y:g.y, items:[it] }; }
       else seg.items.push(it);
     }
     flush();
@@ -2377,11 +2379,13 @@ function makeLine(seg) {
     if (last && last.b === b && last.i === i) last.t += t;
     else runs.push({ t, b, i });
   };
+  const isMarker = t => /^([\u2022\u00b7\u25aa\u25e6\u2023*\-\u2013\u2014]|\d{1,3}[.)]|\(?[A-Za-z]\))$/.test(t.trim());
   for (let k = 0; k < items.length; k++) {
     const it = items[k], prev = items[k - 1];
     if (prev) {
       const gap = it.x - (prev.x + prev.w);
       if (gap > Math.max(1, Math.min(it.fs, prev.fs) * 0.16) && !/\s$/.test(text) && !/^\s/.test(it.s)) push(' ', prev);
+      else if (isMarker(text) && !/^\s/.test(it.s)) push(' ', prev);
     }
     push(it.s, it);
     text += it.s;
@@ -2615,7 +2619,7 @@ function looseTables(lines) {
     while (j < seq.length && usable(seq[j])) j++;
     const run = seq.slice(i, j);
     const wideRows = run.filter(r => r.segs.length >= 3).length;
-    if (run.length >= 3 && wideRows >= Math.max(2, Math.ceil(run.length * 0.6))) {
+    if (run.length >= 3) {
       const starts = [];
       for (const r of run) for (const s of r.segs) starts.push(s.x0);
       starts.sort((a, b) => a - b);
@@ -2629,7 +2633,11 @@ function looseTables(lines) {
       const lens = run.reduce((a, r) => a.concat(r.segs.map(s => s.text.length)), []).sort((a, b) => a - b);
       const median = lens[Math.floor(lens.length / 2)] || 0;
       const maxLen = lens[lens.length - 1] || 0;
-      if (solid.length >= 3 && median <= 26 && maxLen <= 48 && wideRows >= Math.ceil(run.length * 0.8)) {
+      const twoCol = solid.length === 2;
+      const okShape = solid.length >= 3
+        ? (median <= 45 && maxLen <= 100 && wideRows >= Math.ceil(run.length * 0.8))
+        : (twoCol && median <= 30 && maxLen <= 60 && run.length >= 3);
+      if (solid.length >= 2 && okShape) {
         const xs = solid.map(c => c.x0).sort((a, b) => a - b);
         const rows0 = run.map(r => {
           const cells = xs.map(() => '');
@@ -2647,6 +2655,10 @@ function looseTables(lines) {
         for (let c = 0; c < cols_n; c++) colFill.push(rows0.filter(r => r[c]).length);
         const half = Math.ceil(rows0.length * 0.5);
         if (colFill.some(n => n < half) || colFill[0] < Math.ceil(rows0.length * 0.6)) { i = j; continue; }
+        if (twoCol) {
+          if (rows0.length < 3 || colFill.some(n => n < Math.ceil(rows0.length * 0.7))) { i = j; continue; }
+          if (Math.max(...rows0.map(r => (r[0] || '').length)) > 40) { i = j; continue; }
+        }
         const gaps = [];
         for (let q = 1; q < run.length; q++) gaps.push(run[q - 1].y - run[q].y);
         if (gaps.length) {
@@ -2864,6 +2876,8 @@ function weirdBand(b, w, h) {
   const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
   if (bh <= 3 && bw > w * 0.4) return true;
   if (bw <= 3 && bh > h * 0.4) return true;
+  // wide short bands are rules or shaded table rows, not pictures
+  if (bw > w * 0.3 && bh < h * 0.035) return true;
   return false;
 }
 
@@ -3245,10 +3259,26 @@ async function convert() {
     /* blocks */
     const blocks = [];
     let para = null, paraStart = 0, prev = null;
+    const tidyRuns = runs => {
+      let prevSpace = true;
+      const out = [];
+      for (const r of runs) {
+        let t = r.t.replace(/\s+/g, ' ');
+        if (prevSpace) t = t.replace(/^ /, '');
+        if (!t) continue;
+        prevSpace = / $/.test(t);
+        const last = out[out.length - 1];
+        if (last && last.b === r.b && last.i === r.i) last.t += t;
+        else out.push({ t, b:r.b, i:r.i });
+      }
+      if (out.length) out[out.length - 1].t = out[out.length - 1].t.replace(/ $/, '');
+      return out;
+    };
     const pushPara = () => {
       if (!para) return;
-      const t = clean(para.map(r => r.t).join(''));
-      if (t) blocks.push({ type:'p', runs:para, text:t, pg:paraStart });
+      const runs = tidyRuns(para);
+      const t = clean(runs.map(r => r.t).join(''));
+      if (t) blocks.push({ type:'p', runs, text:t, pg:paraStart });
       para = null;
     };
     const nextPara = (l, pg) => { para = []; paraStart = pg; mergeRuns(para, l.runs); };
@@ -3454,7 +3484,12 @@ function joinable(prev, l, samePage, left, right) {
     const gap = prev.y - l.y;
     if (gap > Math.max(prev.size, l.size) * 2) return false;
   }
-  if (l.x0 - (left == null ? LEFT : left) > Math.max(8, l.size * 0.9)) return false;
+  const L0 = left == null ? LEFT : left;
+  const ind = l.x0 - L0, prevInd = prev.x0 - L0;
+  const flushIndent = Math.max(8, l.size * 0.9), prevFlush = Math.max(8, prev.size * 0.9);
+  const prevIsItem = /^([\u2022\u00b7\u25aa\u25e6\u2023*\-\u2013\u2014]|\d{1,3}[.)]|\(?[A-Za-z]\))(\s|$|[A-Z0-9])/.test(prev.text);
+  const prevEff = prevIsItem ? ind : prevInd;
+  if (ind > flushIndent && (prevEff <= prevFlush || ind - prevEff > l.size * 1.4)) return false;
   const shortPrev = prev.x1 < (right == null ? RIGHT : right) - Math.max(6, prev.size * 1.4);
   if (term && shortPrev) return false;
   if (BULLET.test(l.text) && shortPrev) return false;

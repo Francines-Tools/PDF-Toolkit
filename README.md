@@ -111,11 +111,11 @@ Work with the individual things inside the PDF. Use the dropdown at the top to c
 
 Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send to Kindle*), Kobo, Apple Books, Boox or any other reader.
 
-- **Real paragraphs.** Lines the PDF broke at the margin — and at the page edge — are joined back into whole sentences. Words hyphenated across a line are repaired.
+- **Real paragraphs.** Lines the PDF broke at the margin — and at the page edge — are joined back into whole sentences. Words hyphenated across a line are repaired. Bullets and numbers stay on the same line as their text, and hanging indents stay inside one list item.
 - **Chapters and a table of contents.** Section headings become chapters; smaller headings become nested entries you can tap.
 - **Running heads, feet and page numbers** are detected and removed.
 - **Pictures are kept.** Graphs, charts, diagrams and illustrations are found on each page and cropped, then placed between the paragraphs they belong to. This works for pictures embedded in the PDF and for drawings made of vector shapes. Full-page backgrounds, watermarks, rules and logos in the margins are left out. Pages that are one big picture (scans) come through as page images.
-- **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
+- **Tables become real tables.** Ruled tables are reconstructed from their grid lines and borderless tables from their aligned columns, including two-column tables and tables with alternating shaded rows. Each cell is read on its own, so wrapped cell text stays in one cell instead of running across the page, and the EPUB gets a proper table with a header row.
 - **Two-column pages** are read one column at a time, so the text stays in order.
 - **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
 - **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
