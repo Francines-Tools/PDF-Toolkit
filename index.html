@@ -2848,7 +2848,7 @@ function looseTables(lines, pn) {
       const cur = rows0[q];
       const gapHere = q ? run[q - 1].y - run[q].y : 0;
       const szHere = q ? Math.max(run[q].segs[0].size, run[q - 1].segs[0].size) : 0;
-      const tighter = q > 0 && gapHere < szHere * 1.15;
+      const tighter = q > 0 && gapHere < szHere * 1.35;
       const up = logical[logical.length - 1];
       const fewer = run[q].segs.length < maxN;
       const headerish = q === 1 && cur.filter(t => !t).length >= nc * 0.4;
@@ -2923,6 +2923,74 @@ function looseTables(lines, pn) {
   return out;
 }
 
+function oneColTables(p) {
+  const lines = (p.lines || []).filter(l => !l.gone && l.text);
+  const segs = p.segs || [];
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const l0 = lines[i];
+    if (l0.text.length < 3 || l0.text.length > 90 || /^[•·▪◦‣*\-–—]/.test(l0.text)) { i++; continue; }
+    const run = [l0];
+    let j = i + 1;
+    while (j < lines.length) {
+      const l = lines[j];
+      if (Math.abs(l.x0 - l0.x0) > 3) break;
+      if (l.text.length < 3 || l.text.length > 90) break;
+      if (/^[•·▪◦‣*\-–—]/.test(l.text)) break;
+      const gap = run[run.length - 1].y - l.y;
+      if (gap <= 0 || gap > Math.max(34, l.size * 3.4)) break;
+      run.push(l);
+      j++;
+    }
+    if (run.length >= 5) {
+      let ruled = 0;
+      for (let k = 1; k < run.length; k++) {
+        const yRule = run[k].y + run[k].size * 0.35;
+        if (segs.some(sg => Math.abs(sg[0][1] - sg[1][1]) <= 1.5 &&
+          Math.abs((sg[0][1] + sg[1][1]) / 2 - yRule) < run[k].size * 0.8 &&
+          Math.min(sg[0][0], sg[1][0]) <= l0.x0 + 4 &&
+          Math.max(sg[0][0], sg[1][0]) >= l0.x0 + (run[0].x1 - l0.x0) * 0.6)) ruled++;
+      }
+      let headingAbove = false;
+      if (ruled < Math.ceil((run.length - 1) * 0.5)) {
+        const gaps = [];
+        for (let k = 1; k < run.length; k++) gaps.push(run[k - 1].y - run[k].y);
+        const sorted = gaps.slice().sort((a, b) => a - b);
+        const med = sorted[sorted.length >> 1] || 0;
+        const regular = med > 0 && gaps.every(g => g > med * 0.7 && g < med * 1.4);
+        const idx = lines.indexOf(run[0]);
+        const above = idx > 0 ? lines[idx - 1] : null;
+        headingAbove = !!(regular && above && above.size >= run[0].size * 1.1 &&
+          Math.abs(above.x0 - run[0].x0) <= 6 &&
+          run[0].y - above.y <= Math.max(32, run[0].size * 3.5) && above.text.length >= 4);
+      }
+      if (ruled >= Math.ceil((run.length - 1) * 0.5) || headingAbove) {
+        out.push({
+          rows: run.map(l => [{ text:l.text, bold:false }]),
+          header: false, ruled: false,
+          x0: Math.min(...run.map(l => l.x0)),
+          x1: Math.max(...run.map(l => l.x1)),
+          y0: run[run.length - 1].y - run[run.length - 1].size * 0.5,
+          y1: run[0].y + run[0].size * 1.2
+        });
+        i = j;
+        continue;
+      }
+    }
+    i = Math.max(j, i + 1);
+  }
+  return out;
+}
+
+function tableIsShort(t) {
+  const lens = [];
+  for (const r of (t.rows || [])) for (const c of r) if (c.text) lens.push(c.text.length);
+  if (!lens.length) return true;
+  lens.sort((a, b) => a - b);
+  return (lens[Math.floor(lens.length * 0.75)] || 0) <= 25;
+}
+
 function buildTables(p) {
   const gone = (p.lines || []).filter(l => l.gone);
   const usable = gone.length ? p.items.filter(it => !gone.some(l =>
@@ -2963,6 +3031,9 @@ function buildTables(p) {
       for (const R of over) tabs.splice(tabs.indexOf(R), 1);
       tabs.push(L);
     }
+  }
+  for (const t of oneColTables(p)) {
+    if (!tabs.some(o => overlap(o, t) > 0.2)) tabs.push(t);
   }
   return tabs;
 }
@@ -3156,8 +3227,13 @@ async function visualFigures(p) {
     }
     if (clashes) continue;
     const medSize = p.lines.length ? p.lines.map(l => l.size).sort((a, b) => a - b)[p.lines.length >> 1] : 11;
-    const inTable = l => (p.tableCand || []).some(t =>
-      l.x0 > t.x0 - 2 && l.x1 < t.x1 + 2 && l.y > t.y0 - 2 && l.y < t.y1 + 2);
+    const inTable = l => (p.tableCand || []).some(t => {
+      const ta = (t.x1 - t.x0) * (t.y1 - t.y0);
+      const ox = Math.max(0, Math.min(x1, t.x1) - Math.max(x0, t.x0));
+      const oy = Math.max(0, Math.min(yTop, t.y1) - Math.max(yBot, t.y0));
+      if (ta > 0 && ox * oy > ta * 0.2 && !tableIsShort(t)) return false;
+      return l.x0 > t.x0 - 2 && l.x1 < t.x1 + 2 && l.y > t.y0 - 2 && l.y < t.y1 + 2;
+    });
     const boxW = x1 - x0, boxH = yTop - yBot;
 
     /* a tinted panel full of body text is a callout, not a picture */
@@ -3215,7 +3291,8 @@ async function visualFigures(p) {
       const nearTop = l.y + l.size * 0.8 >= yTop - l.size * 1.2 && l.y <= yTop + l.size * 1.4;
       const nearBot = l.y - l.size * 0.3 <= yBot + l.size * 1.2 && l.y + l.size * 0.8 >= yBot - l.size * 1.4;
       if (!nearTop && !nearBot) continue;
-      if (l.text.length <= 40) {
+      const medSize = p.lines.length ? p.lines.map(x => x.size).sort((a, b) => a - b)[p.lines.length >> 1] : 11;
+      if (l.text.length <= 40 && l.size <= medSize * 1.3 && !/^(fig(ure)?|table|source)\b/i.test(l.text)) {
         x0 = Math.min(x0, l.x0); x1 = Math.max(x1, l.x1);
         yTop = Math.max(yTop, l.y + l.size); yBot = Math.min(yBot, l.y - l.size * 0.4);
         l.gone = true;
@@ -3224,6 +3301,18 @@ async function visualFigures(p) {
       } else {
         yBot = Math.max(yBot, l.y + l.size * 0.9);
       }
+    }
+    for (const l of p.lines) {
+      if (l.gone || inTable(l)) continue;
+      if (l.text.length > 40 || l.size > medSize * 1.3) continue;
+      if (/^(fig(ure)?|table|source)\b/i.test(l.text)) continue;
+      const cx = (l.x0 + l.x1) / 2;
+      if (cx < x0 - 12 || cx > x1 + 12) continue;
+      if (l.y > yTop + p.h * 0.12 || l.y < yBot - p.h * 0.12) continue;
+      x0 = Math.min(x0, l.x0); x1 = Math.max(x1, l.x1);
+      yTop = Math.max(yTop, l.y + l.size);
+      yBot = Math.min(yBot, l.y - l.size * 1.2);
+      l.gone = true;
     }
     if (x1 - x0 < 16 || yTop - yBot < 10) continue;
 
@@ -3658,6 +3747,16 @@ async function convert() {
     /* tables: read cell by cell, without their text leaking into the flow */
     for (const p of pages) {
       if (p.ocr || p.blank || p.toc || p.rawChars < 40) continue;
+      p.tableCand = (p.tableCand || []).filter(t => {
+        const area = (t.x1 - t.x0) * (t.y1 - t.y0);
+        if (!(area > 0)) return false;
+        if (tableIsShort(t)) return true;
+        return !(p.figs || []).some(f => {
+          const ox = Math.max(0, Math.min(t.x1, f.x1) - Math.max(t.x0, f.x0));
+          const oy = Math.max(0, Math.min(t.y1, f.yTop) - Math.max(t.y0, f.yBot));
+          return ox * oy > area * 0.2;
+        });
+      });
       try { applyTables(p); } catch (e) {}
     }
 
