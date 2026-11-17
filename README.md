@@ -4,7 +4,7 @@
 
 # PDF Toolkit
 
-A private, all-in-one PDF tool that runs entirely in your browser. Compress a PDF, sign it, fill in forms, rearrange pages, and pull out or change the things inside it, all on your phone or computer.
+A private, all-in-one PDF tool that runs entirely in your browser. Compress a PDF, sign it, fill in forms, rearrange pages, turn it into an e-book, and pull out or change the things inside it, all on your phone or computer.
 
 **Your files never leave your device.** Nothing is uploaded anywhere.
 
@@ -18,6 +18,7 @@ A private, all-in-one PDF tool that runs entirely in your browser. Compress a PD
    - **Sign & edit** – add signatures and text
    - **Pages** – reorder, rotate, delete, duplicate, merge
    - **Elements** – work with the images, text, fonts and other parts inside the PDF
+   - **ePub** – turn the PDF into an e-book with chapters and a table of contents
 3. Save your result. On a phone you may see a confirmation prompt or a share sheet. That is normal.
 4. Tap **← New file** to start over with a different PDF.
 
@@ -106,10 +107,39 @@ Work with the individual things inside the PDF. Use the dropdown at the top to c
 
 ---
 
+## ePub
+
+Turns the PDF into an EPUB 3 e-book you can read on a Kindle (send it with *Send to Kindle*), Kobo, Apple Books, Boox or any other reader.
+
+- **Real paragraphs.** Lines the PDF broke at the margin — and at the page edge — are joined back into whole sentences. Words hyphenated across a line are repaired.
+- **Chapters and a table of contents.** Section headings become chapters; smaller headings become nested entries you can tap.
+- **Running heads, feet and page numbers** are detected and removed.
+- **Pictures are kept.** Picture figures are cropped from the page and placed where they belong. Pages that are one big picture (scans) come through as page images. Charts and diagrams drawn as vectors stay on the PDF only.
+- **Two-column pages** are read one column at a time, so the text stays in order.
+- **Scanned pages can be read with OCR.** Tick **Read the text with OCR** and pages that are pictures of text become real, searchable text. Pick the OCR language from the dropdown (English by default).
+- **Footnotes** at the bottom of a page are moved to a **Notes** section at the end of the chapter.
+- Title, author and language are filled in from the PDF but you can change them before converting.
+- Bold and italic text is kept where the PDF's fonts identify it.
+
+**Scanned pages: text or picture?**
+- Before OCR, each textless page is examined. A page that is mostly white with regular dark lines is treated as a picture of text and read with OCR. A colourful or busy picture — a photo, a plate, a map, a comic panel — is kept as an image and OCR is not wasted on it.
+- When a page is read with OCR, the text replaces the page picture by default. That keeps the EPUB small, reflowable and searchable, and stops the reader from showing the same page twice.
+- **Keep the page picture too** puts the scan after its text. That is useful when you need the original for checking names, numbers, tables or formulas, but it roughly doubles the size of those pages, so it is off by default.
+- If OCR is not confident about a page, the picture is kept alongside the text automatically, so nothing is lost.
+
+Good to know:
+- **OCR is opt-in.** The engine is about 15 MB and is downloaded the first time you use it, plus one language file; the page itself never leaves your device. Scans that are not read stay as images, and their text can't be searched.
+- **OCR is not perfect.** Check names, numbers and small print against the page pictures if accuracy matters. Store books with DRM are not supported.
+- **Detection is heuristic.** Unusual layouts (poetry, tables, sidebars, three-column pages, comic panels) can come out in the wrong order. Check the result in your reader.
+- **The EPUB is a new file.** It doesn't replace the PDF in the app; the other tabs still work on the PDF.
+- **Pictures add weight.** Keeping every figure makes a bigger EPUB. Untick **Keep figures and scanned pages** for a text-only book.
+
+---
+
 ## Good to know
 
 - **Encrypted files.** Many PDFs are "encrypted" only to restrict printing or copying and open without a password. The app can open these. A PDF that genuinely needs a password cannot be opened.
-- **Scanned PDFs.** Text in scanned pages is a picture, so it can't be selected or edited (no text recognition is included).
+- **Scanned PDFs.** Text in scanned pages is a picture, so it can't be selected or edited. The **ePub** tab can read those pages with OCR and make searchable text.
 - **Your work is protected.** The app saves your file and your added items on your device as you go. If the page reloads, you'll be offered **Restore your last session**. A back swipe asks you to confirm before leaving.
 - **Saved signatures** are stored in this browser only, so they won't appear on another device.
 - **Fonts and licences.** Fonts inside a PDF are usually licensed for that document only. Check the licence before installing or sharing them.
@@ -125,4 +155,8 @@ Work with the individual things inside the PDF. Use the dropdown at the top to c
 | Save does nothing | Check the confirmation prompt or share sheet. If your browser blocks saving, open the app's link in a desktop browser. |
 | Compression doesn't shrink much | The file is probably mostly text, or its images are already efficient. |
 | Text in the Text section is missing | The text may be part of a scanned image, or use a font the app can't read. |
+| EPUB paragraphs run together or split oddly | The page layout is unusual (tables, poetry, sidebars). Try a different PDF or fix the paragraphs in a reader or editor. |
+| EPUB has no chapters | The PDF has no headings the app can recognise. Long books are split into parts instead. |
+| OCR does nothing | Tick **Read the text with OCR**, and make sure the page really is text. Photos, plates and diagrams are deliberately left as images. |
+| OCR text has mistakes | Recognition is best-effort. Try a higher-quality scan, or turn on **Keep the page picture too** to compare. |
 | Something looks off after an edit | Use **Undo** in Elements. The original file on your device is never changed. |
